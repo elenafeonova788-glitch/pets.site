@@ -1,0 +1,321 @@
+:root {
+  --primary-color: #556b2f;
+  --secondary-color: #708090;
+  --accent-color: #8fbc8f;
+  --light-color: #f5f5f5;
+  --dark-color: #2f4f4f;
+  --text-color: #333333;
+}
+
+body {
+  background-color: var(--light-color);
+  color: var(--text-color);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar {
+  background-color: var(--dark-color) !important;
+}
+
+.navbar-brand, .nav-link {
+  color: white !important;
+}
+
+.nav-link.active {
+  color: var(--accent-color) !important;
+  font-weight: bold;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+  background-color: #6b8e23;
+  border-color: #6b8e23;
+}
+
+.btn-outline-primary {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.card {
+  transition: transform 0.3s, box-shadow 0.3s;
+  border: none;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: white;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.section-title {
+  color: var(--dark-color);
+  border-bottom: 2px solid var(--accent-color);
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.carousel-image {
+  height: 500px;
+  object-fit: cover;
+  width: 100%;
+}
+
+/* Исправленная карусель для мобильных устройств */
+.carousel-full-width {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+@media (min-width: 768px) {
+  .carousel-full-width {
+    margin-left: 50px;
+    margin-right: 50px;
+  }
+}
+
+@media (min-width: 992px) {
+  .carousel-full-width {
+    margin-left: 100px;
+    margin-right: 100px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .carousel-full-width {
+    margin-left: 150px;
+    margin-right: 150px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .carousel-full-width {
+    margin-left: 290px;
+    margin-right: 290px;
+  }
+}
+
+/* Адаптивная высота карусели для мобильных */
+@media (max-width: 768px) {
+  .carousel-image {
+    height: 300px;
+  }
+}
+
+@media (max-width: 576px) {
+  .carousel-image {
+    height: 250px;
+  }
+}
+
+.pet-card-image {
+  height: 200px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.logo-img {
+  height: 50px;
+  width: auto;
+}
+
+.profile-avatar {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+}
+
+.pet-image-preview {
+  height: 120px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.required-field::after {
+  content: " *";
+  color: #dc3545;
+}
+
+.search-highlight {
+  background-color: #fff3cd;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.pet-status-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+}
+
+.no-results {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+}
+
+.form-control:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 0.2rem rgba(143, 188, 143, 0.25);
+}
+
+.alert-custom {
+  border-left: 4px solid var(--accent-color);
+}
+
+footer {
+  background-color: var(--dark-color) !important;
+}
+
+.invalid-feedback {
+  display: none;
+  color: #dc3545;
+  font-size: 0.875em;
+}
+
+.was-validated .form-control:invalid ~ .invalid-feedback,
+.form-control.is-invalid ~ .invalid-feedback {
+  display: block;
+}
+
+.was-validated .form-control:invalid,
+.form-control.is-invalid {
+  border-color: #dc3545;
+}
+
+.api-error {
+  color: #dc3545;
+  font-size: 0.875em;
+  margin-top: 0.25rem;
+}
+
+.password-toggle {
+  cursor: pointer;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.dropdown-toggle::after {
+  margin-left: 0.5em;
+}
+
+.pet-details-carousel {
+  height: 400px;
+}
+
+.pet-details-carousel img {
+  object-fit: cover;
+  height: 400px;
+  width: 100%;
+}
+
+.edit-form {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.photo-preview {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 5px;
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+.search-suggestions {
+  position: absolute;
+  z-index: 1000;
+  width: 100%;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 0 0 5px 5px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.search-suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.search-suggestion-item:hover {
+  background-color: #f8f9fa;
+}
+
+/* Стили для пагинации */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.page-info {
+  text-align: center;
+  margin: 10px 0;
+  color: #6c757d;
+}
+
+/* Новые стили для горизонтального расположения результатов поиска */
+.search-results-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.search-result-card {
+  height: 100%;
+}
+/* Добавьте в ваш основной файл CSS */
+.suggestions-dropdown {
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.suggestion-item:hover {
+  background-color: #f8f9fa;
+}
+
+.hover-bg-light:hover {
+  background-color: #f8f9fa !important;
+}
+
+.position-relative {
+  position: relative;
+}
+/* Стили для выравнивания названия сайта в навигации */
+.navbar-brand {
+  display: flex;
+  align-items: center;
+}
