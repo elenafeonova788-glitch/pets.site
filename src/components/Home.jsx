@@ -27,7 +27,7 @@ const Home = ({ showPetDetails }) => {
       // Загружаем слайдер и объявления параллельно
       const [sliderResponse, petsResponse] = await Promise.allSettled([
         petsAPI.getSlider(),
-        petsAPI.getAllPets(1, 6)
+        petsAPI.getAllPets(1, 6) // 6 объявлений на главной
       ]);
       
       // Обрабатываем слайдер
@@ -55,12 +55,12 @@ const Home = ({ showPetDetails }) => {
         const petsData = petsResponse.value;
         console.log('Pets data:', petsData);
         
-        const transformedPets = transformPetData(petsData);
-        console.log('Transformed pets:', transformedPets);
+        const transformedData = transformPetData(petsData);
+        console.log('Transformed pets:', transformedData);
         
-        setHomeAds(transformedPets || []);
+        setHomeAds(transformedData.pets || []);
         
-        if (!transformedPets || transformedPets.length === 0) {
+        if (!transformedData.pets || transformedData.pets.length === 0) {
           setHomeAds(getFallbackPets());
         }
       } else {

@@ -61,30 +61,21 @@ const Login = () => {
       
     } catch (error) {
       console.error('Login error:', error);
-      // Преобразуем ошибку в строку
       const errorMessage = error.message || error.toString();
       setApiError(errorMessage || 'Ошибка при входе. Проверьте email и пароль.');
     } finally {
       setLoading(false);
     }
   };
+
   const handleTestLogin = () => {
     setFormData({
-      email: 'test@example.com', // Замените на реальный тестовый email
-      password: 'Password123', // Замените на реальный тестовый пароль
+      email: 'test@example.com',
+      password: 'Password123',
       rememberMe: false
     });
   };
-  
-  // Внутри рендера, перед кнопкой входа добавьте:
-  <Button 
-    variant="outline-secondary" 
-    className="w-100 mb-3" 
-    onClick={handleTestLogin}
-    disabled={loading}
-  >
-    Использовать тестовые данные
-  </Button>
+
   return (
     <Container>
       <Row className="justify-content-center">
@@ -100,6 +91,15 @@ const Login = () => {
               )}
               
               <Form onSubmit={handleSubmit}>
+                <Button 
+                  variant="outline-secondary" 
+                  className="w-100 mb-3" 
+                  onClick={handleTestLogin}
+                  disabled={loading}
+                >
+                  Использовать тестовые данные
+                </Button>
+                
                 <Form.Group className="mb-3">
                   <Form.Label className="required-field">Email</Form.Label>
                   <Form.Control
@@ -130,6 +130,18 @@ const Login = () => {
                   <Form.Control.Feedback type="invalid">
                     {errors.password}
                   </Form.Control.Feedback>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Check
+                    type="checkbox"
+                    id="rememberMe"
+                    name="rememberMe"
+                    label="Запомнить меня"
+                    checked={formData.rememberMe}
+                    onChange={handleChange}
+                    disabled={loading}
+                  />
                 </Form.Group>
 
                 <Button 

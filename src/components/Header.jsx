@@ -14,24 +14,38 @@ const Header = () => {
     e.preventDefault();
     if (searchTerm.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
-      setSearchTerm('');
+    } else {
+      navigate('/search');
     }
+    setSearchTerm('');
   };
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchTerm(value);
     
-    // Очищаем предыдущий таймер
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     
-    // Запускаем новый таймер для поиска при вводе более 3 символов
-    if (value.trim().length >= 3) {
+    if (value.trim().length >= 2) {
       searchTimeoutRef.current = setTimeout(() => {
-        navigate(`/search?q=${encodeURIComponent(value.trim())}`);
-      }, 1000);
+        if (value.trim()) {
+          navigate(`/search?q=${encodeURIComponent(value.trim())}`);
+          setSearchTerm('');
+        }
+      }, 800);
+    } else if (value.trim().length === 0 && location.pathname === '/search') {
+      searchTimeoutRef.current = setTimeout(() => {
+        navigate('/search');
+      }, 300);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearch(e);
     }
   };
 
@@ -83,11 +97,8 @@ const Header = () => {
               className="me-2"
               value={searchTerm}
               onChange={handleSearchChange}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch(e);
-                }
-              }}
+              onKeyDown={handleKeyDown}
+              aria-label="Поиск"
             />
             <Button type="submit" variant="outline-light">
               Поиск

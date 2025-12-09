@@ -132,33 +132,51 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
       
       <Row>
         <Col md={4} className="text-center mb-4">
-          <img 
-            src={currentUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=200&q=80'} 
-            className="profile-avatar rounded-circle mb-3" 
-            alt="Аватар" 
-            style={{ width: '150px', height: '150px', objectFit: 'cover' }}
-          />
-          <h5 id="userName">{currentUser?.name}</h5>
-          <p className="text-muted">Пользователь</p>
-          <Button 
-            variant="outline-dark" 
-            className="btn-sm" 
-            onClick={() => setEditMode(!editMode)}
-            disabled={loading}
-          >
-            {editMode ? 'Отменить' : 'Редактировать профиль'}
-          </Button>
-          <Button 
-            variant="outline-dark" 
-            className="btn-sm ms-2" 
-            onClick={handleRefreshAds}
-            disabled={loading}
-          >
-            Обновить объявления
-          </Button>
-          <Button variant="outline-danger" className="btn-sm ms-2 mt-2" onClick={handleLogout}>
-            Выйти
-          </Button>
+          {/* БАЗОВАЯ КАРТИНКА АВАТАРА ВМЕСТО ЗАГРУЗКИ */}
+          <div className="mb-3 position-relative">
+            <img 
+              src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" 
+              className="profile-avatar rounded-circle" 
+              alt="Аватар" 
+              style={{ 
+                width: '150px', 
+                height: '150px', 
+                objectFit: 'cover',
+                border: '3px solid #007bff',
+                padding: '3px'
+              }}
+            />
+            <div className="position-absolute bottom-0 end-0 bg-primary rounded-circle p-1">
+              <i className="bi bi-check-circle-fill text-white"></i>
+            </div>
+          </div>
+          <h5 id="userName" className="mb-2">{currentUser?.name}</h5>
+          <p className="text-muted mb-3">Пользователь</p>
+          <div className="d-flex flex-column gap-2">
+            <Button 
+              variant="outline-dark" 
+              className="btn-sm" 
+              onClick={() => setEditMode(!editMode)}
+              disabled={loading}
+            >
+              {editMode ? 'Отменить' : 'Редактировать профиль'}
+            </Button>
+            <Button 
+              variant="outline-dark" 
+              className="btn-sm" 
+              onClick={handleRefreshAds}
+              disabled={loading}
+            >
+              Обновить объявления
+            </Button>
+            <Button 
+              variant="outline-danger" 
+              className="btn-sm" 
+              onClick={handleLogout}
+            >
+              Выйти
+            </Button>
+          </div>
         </Col>
         
         <Col md={8}>

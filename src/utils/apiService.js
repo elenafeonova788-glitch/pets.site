@@ -31,9 +31,7 @@ const handleResponse = async (response) => {
       const errorData = await response.json();
       console.log('Error response:', errorData);
       
-      // Обрабатываем разные форматы ошибок
       if (errorData.errors) {
-        // Laravel validation errors format
         const errors = Object.values(errorData.errors).flat();
         errorMessage = errors.join(', ');
       } else if (errorData.message) {
@@ -135,18 +133,18 @@ export const subscriptionAPI = {
   },
 };
 
-// Функции для поиска
+// API для поиска животных
 export const searchAPI = {
-  // Быстрый поиск по описанию (для шапки и основного поиска)
+  // Текстовый поиск
   searchByQuery: async (query, page = 1, limit = 10, filters = {}) => {
-    console.log(`Searching by query: "${query}", page ${page}...`);
+    console.log(`Searching by query: "${query}", page ${page}, limit ${limit}...`);
     const queryParams = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
     });
     
     if (query && query.trim()) {
-      queryParams.append('q', query);
+      queryParams.append('q', query.trim());
     }
     
     // Добавляем фильтры
@@ -156,10 +154,11 @@ export const searchAPI = {
       }
     });
     
-    console.log('Search URL:', `${API_BASE_URL}/search?${queryParams}`);
+    const url = `${API_BASE_URL}/search?${queryParams}`;
+    console.log('Search URL:', url);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/search?${queryParams}`, {
+      const response = await fetch(url, {
         headers: getHeaders(false),
       });
       return handleResponse(response);
@@ -171,7 +170,7 @@ export const searchAPI = {
 
   // Поиск по фильтрам (район и вид животного)
   searchByFilters: async (filters, page = 1, limit = 10) => {
-    console.log(`Searching by filters:`, filters, `page ${page}...`);
+    console.log(`Searching by filters:`, filters, `page ${page}, limit ${limit}...`);
     const queryParams = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
@@ -184,15 +183,38 @@ export const searchAPI = {
       }
     });
     
-    console.log('Filter search URL:', `${API_BASE_URL}/search/order?${queryParams}`);
+    const url = `${API_BASE_URL}/search/order?${queryParams}`;
+    console.log('Filter search URL:', url);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/search/order?${queryParams}`, {
+      const response = await fetch(url, {
         headers: getHeaders(false),
       });
       return handleResponse(response);
     } catch (error) {
       console.error('Search by filters error:', error);
+      throw error;
+    }
+  },
+
+  // Получить всех животных без фильтров
+  getAllAnimals: async (page = 1, limit = 10) => {
+    console.log(`Getting all animals page ${page}, limit ${limit}...`);
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
+    
+    const url = `${API_BASE_URL}/pets?${queryParams}`;
+    console.log('Get all animals URL:', url);
+    
+    try {
+      const response = await fetch(url, {
+        headers: getHeaders(false),
+      });
+      return handleResponse(response);
+    } catch (error) {
+      console.error('Get all animals error:', error);
       throw error;
     }
   },
@@ -215,7 +237,7 @@ export const petsAPI = {
   },
 
   // Получить всех животных (с пагинацией)
-  getAllPets: async (page = 1, limit = 6, filters = {}) => {
+  getAllPets: async (page = 1, limit = 10, filters = {}) => {
     console.log(`Fetching pets page ${page}, limit ${limit}...`);
     const queryParams = new URLSearchParams({
       page: page.toString(),
@@ -229,10 +251,11 @@ export const petsAPI = {
       }
     });
     
-    console.log('Fetching URL:', `${API_BASE_URL}/pets?${queryParams}`);
+    const url = `${API_BASE_URL}/pets?${queryParams}`;
+    console.log('Get all pets URL:', url);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/pets?${queryParams}`, {
+      const response = await fetch(url, {
         headers: getHeaders(false),
       });
       return handleResponse(response);
@@ -242,29 +265,29 @@ export const petsAPI = {
     }
   },
 
-  // Универсальный поиск животных
-  searchPets: async (query, page = 1, limit = 6, filters = {}) => {
-    console.log(`Searching pets: "${query}", page ${page}...`);
+  // Универсальный поиск животных - РАБОТАЮТ ОБА ПОИСКА
+  searchPets: async (query, page = 1, limit = 10, filters = {}) => {
+    console.log(`Universal search: query="${query}", page=${page}, limit=${limit}, filters:`, filters);
     
-    // Если есть текст запроса, используем текстовый поиск
-    if (query && query.trim()) {
+    // Если есть И текст И фильтры
+    if (query && query.trim() && Object.keys(filters).length > 0) {
+      console.log('Using combined search with text and filters');
       return searchAPI.searchByQuery(query, page, limit, filters);
     }
-    // Если нет текста, но есть фильтры, используем поиск по фильтрам
+    // Если только текст
+    else if (query && query.trim()) {
+      console.log('Using text search without filters');
+      return searchAPI.searchByQuery(query, page, limit, {});
+    }
+    // Если только фильтры
     else if (Object.keys(filters).length > 0) {
+      console.log('Using filter search without text');
       return searchAPI.searchByFilters(filters, page, limit);
     }
     // Иначе возвращаем все объявления
     else {
-      const queryParams = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-      });
-      
-      const response = await fetch(`${API_BASE_URL}/pets?${queryParams}`, {
-        headers: getHeaders(false),
-      });
-      return handleResponse(response);
+      console.log('Getting all pets without filters');
+      return searchAPI.getAllAnimals(page, limit);
     }
   },
 
@@ -281,7 +304,6 @@ export const petsAPI = {
     console.log('Creating pet with data:', petData);
     const formData = new FormData();
     
-    // Добавляем все поля в FormData
     Object.keys(petData).forEach(key => {
       if (key === 'photos' && Array.isArray(petData.photos)) {
         petData.photos.forEach((photo, index) => {
@@ -349,22 +371,18 @@ export const petsAPI = {
 const getFullImageUrl = (imagePath) => {
   if (!imagePath) return '';
   
-  // Если уже полный URL
   if (imagePath.startsWith('http')) {
     return imagePath;
   }
   
-  // Если путь начинается с /storage
   if (imagePath.startsWith('/storage')) {
     return `https://pets.сделай.site${imagePath}`;
   }
   
-  // Если относительный путь
   if (imagePath.startsWith('storage/')) {
     return `https://pets.сделай.site/${imagePath}`;
   }
   
-  // Добавляем базовый путь
   return `https://pets.сделай.site/storage/${imagePath}`;
 };
 
@@ -383,8 +401,6 @@ const formatDate = (dateString) => {
 const transformSinglePet = (petObj) => {
   if (!petObj) return null;
   
-  console.log('Transforming single pet:', petObj);
-  
   // Получаем фотографии
   const photos = getPhotosArray(petObj);
   
@@ -395,7 +411,7 @@ const transformSinglePet = (petObj) => {
   const result = {
     id: petObj.id || Date.now(),
     type: petObj.kind || 'другое',
-    status: 'found', // По спецификации - все найденные животные
+    status: 'found',
     name: petObj.name || 'Без имени',
     description: petObj.description || 'Нет описания',
     district: petObj.district || '',
@@ -418,7 +434,6 @@ const transformSinglePet = (petObj) => {
 const getPhotosArray = (petObj) => {
   const photos = [];
   
-  // Если есть photos массив
   if (petObj.photos && Array.isArray(petObj.photos)) {
     petObj.photos.forEach(photo => {
       if (photo && typeof photo === 'string') {
@@ -428,13 +443,11 @@ const getPhotosArray = (petObj) => {
     });
   }
   
-  // Если photos это строка
   if (petObj.photos && typeof petObj.photos === 'string') {
     const fullUrl = getFullImageUrl(petObj.photos);
     if (fullUrl) photos.push(fullUrl);
   }
   
-  // Если есть отдельные поля с фото
   const singlePhotoFields = ['photo', 'image', 'image_url', 'photo_url', 'main_photo'];
   singlePhotoFields.forEach(field => {
     if (petObj[field] && typeof petObj[field] === 'string') {
@@ -443,7 +456,6 @@ const getPhotosArray = (petObj) => {
     }
   });
   
-  // Если фото не найдены, используем фолбэк по типу животного
   if (photos.length === 0) {
     const type = petObj.kind || 'другое';
     const fallbackImages = {
@@ -459,39 +471,86 @@ const getPhotosArray = (petObj) => {
   return photos;
 };
 
-// Трансформация данных для единообразия
+// Трансформация данных для единообразия с пагинацией
 export const transformPetData = (apiData) => {
   console.log('Transforming pet data:', apiData);
   
-  // Если пришел ответ с пагинацией
-  if (apiData && apiData.data && apiData.data.orders && Array.isArray(apiData.data.orders)) {
-    return apiData.data.orders.map(item => transformSinglePet(item));
-  }
+  let pets = [];
+  let pagination = { total: 0, last_page: 1, current_page: 1 };
   
-  // Если пришел ответ для слайдера
-  if (apiData && apiData.data && apiData.data.pets && Array.isArray(apiData.data.pets)) {
-    return apiData.data.pets.map(item => transformSinglePet(item));
+  if (apiData && apiData.data) {
+    if (apiData.data.orders && Array.isArray(apiData.data.orders)) {
+      pets = apiData.data.orders.map(item => transformSinglePet(item));
+    }
+    else if (apiData.data.pets && Array.isArray(apiData.data.pets)) {
+      pets = apiData.data.pets.map(item => transformSinglePet(item));
+    }
+    else if (apiData.data.pet && Array.isArray(apiData.data.pet)) {
+      pets = apiData.data.pet.map(item => transformSinglePet(item));
+    }
+    else if (Array.isArray(apiData.data)) {
+      pets = apiData.data.map(item => transformSinglePet(item));
+    }
+    
+    // Извлекаем метаданные пагинации из разных возможных мест
+    if (apiData.meta) {
+      pagination = {
+        total: apiData.meta.total || 0,
+        last_page: apiData.meta.last_page || 1,
+        current_page: apiData.meta.current_page || 1
+      };
+    }
+    else if (apiData.data.meta) {
+      pagination = {
+        total: apiData.data.meta.total || 0,
+        last_page: apiData.data.meta.last_page || 1,
+        current_page: apiData.data.meta.current_page || 1
+      };
+    }
+    else if (apiData.total && apiData.last_page) {
+      pagination = {
+        total: apiData.total || 0,
+        last_page: apiData.last_page || 1,
+        current_page: apiData.current_page || 1
+      };
+    }
+    else if (apiData.data.total && apiData.data.last_page) {
+      pagination = {
+        total: apiData.data.total || 0,
+        last_page: apiData.data.last_page || 1,
+        current_page: apiData.data.current_page || 1
+      };
+    }
   }
-  
-  // Если пришел ответ для одного питомца
-  if (apiData && apiData.data && apiData.data.pet && Array.isArray(apiData.data.pet)) {
-    return apiData.data.pet.map(item => transformSinglePet(item));
-  }
-  
-  // Если пришел массив напрямую
-  if (Array.isArray(apiData)) {
+  else if (Array.isArray(apiData)) {
     console.log('Transforming array of', apiData.length, 'pets');
-    return apiData.map(item => transformSinglePet(item));
+    pets = apiData.map(item => transformSinglePet(item));
+    pagination = {
+      total: apiData.length,
+      last_page: 1,
+      current_page: 1
+    };
+  }
+  else if (apiData && typeof apiData === 'object') {
+    const singlePet = transformSinglePet(apiData);
+    if (singlePet) {
+      pets = [singlePet];
+    }
+    pagination = {
+      total: 1,
+      last_page: 1,
+      current_page: 1
+    };
   }
   
-  console.warn('transformPetData received unexpected data:', apiData);
-  return [];
+  console.log('Transformed result:', { pets, pagination });
+  return { pets, pagination };
 };
 
 // Функция для преобразования данных из формы в формат API
 export const preparePetFormData = (formData, userId = null) => {
   const data = {
-    kind: formData.type, // Уже на русском
+    kind: formData.type,
     name: formData.userName,
     phone: formData.userPhone,
     email: formData.userEmail,
@@ -512,29 +571,6 @@ export const preparePetFormData = (formData, userId = null) => {
   }
   
   return data;
-};
-
-// Функция для извлечения метаданных пагинации
-export const getPaginationMeta = (apiResponse) => {
-  if (!apiResponse) {
-    return { total: 0, last_page: 1, current_page: 1 };
-  }
-  
-  // Laravel pagination format
-  if (apiResponse.meta) {
-    return {
-      total: apiResponse.meta.total || 0,
-      last_page: apiResponse.meta.last_page || 1,
-      current_page: apiResponse.meta.current_page || 1,
-    };
-  }
-  
-  // Simple format
-  return {
-    total: apiResponse.total || 0,
-    last_page: apiResponse.last_page || apiResponse.total_pages || 1,
-    current_page: apiResponse.current_page || apiResponse.page || 1,
-  };
 };
 
 // Экспортируем функцию для URL изображений

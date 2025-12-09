@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Form, Button, Card, Container, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import { districts } from '../utils/constants';
@@ -18,7 +18,7 @@ const AddPet = () => {
     
     // Информация о животном
     type: '',
-    status: 'found', // По спецификации - все найденные животные
+    status: 'found',
     name: '',
     description: '',
     district: '',
@@ -58,6 +58,15 @@ const AddPet = () => {
       }
       
       const newPhotos = Array.from(files);
+      
+      // ПРОВЕРКА ФОРМАТА - ТОЛЬКО PNG
+      const invalidFiles = newPhotos.filter(file => file.type !== 'image/png');
+      if (invalidFiles.length > 0) {
+        alert('Разрешены только файлы формата PNG!');
+        e.target.value = '';
+        return;
+      }
+      
       const newPreviews = [];
       
       newPhotos.forEach(file => {
@@ -66,7 +75,7 @@ const AddPet = () => {
           reader.onload = (e) => {
             newPreviews.push(e.target.result);
             if (newPreviews.length === newPhotos.length) {
-              setPhotoPreviews(newPreviews);
+              setPhotoPreviews(prev => [...prev, ...newPreviews].slice(0, 3));
             }
           };
           reader.readAsDataURL(file);
@@ -75,7 +84,7 @@ const AddPet = () => {
       
       setFormData(prev => ({
         ...prev,
-        photos: newPhotos
+        photos: [...prev.photos, ...newPhotos].slice(0, 3)
       }));
     } else {
       setFormData(prev => ({
@@ -84,6 +93,20 @@ const AddPet = () => {
       }));
     }
     setApiError('');
+  };
+
+  const removePhoto = (index) => {
+    setFormData(prev => {
+      const newPhotos = [...prev.photos];
+      newPhotos.splice(index, 1);
+      return { ...prev, photos: newPhotos };
+    });
+    
+    setPhotoPreviews(prev => {
+      const newPreviews = [...prev];
+      newPreviews.splice(index, 1);
+      return newPreviews;
+    });
   };
 
   const validateForm = () => {
@@ -125,6 +148,7 @@ const AddPet = () => {
       newErrors.date = 'Поле обязательно для заполнения';
     }
 
+    // ОБЯЗАТЕЛЬНО МИНИМУМ 1 ФОТОГРАФИЯ
     if (formData.photos.length === 0) {
       newErrors.photos = 'Необходимо загрузить хотя бы одну фотографию';
     } else if (formData.photos.length > 3) {
@@ -171,7 +195,7 @@ const AddPet = () => {
         name: formData.userName,
         phone: formData.userPhone,
         email: formData.userEmail,
-        kind: formData.type, // русское название
+        kind: formData.type,
         description: formData.description,
         district: formData.district,
         date: formData.date,
@@ -191,7 +215,7 @@ const AddPet = () => {
         formDataToSend.append(key, petData[key]);
       });
 
-      // Добавляем фото
+      // Добавляем фото (ОБЯЗАТЕЛЬНО 1, максимум 3) - ТОЛЬКО PNG
       if (formData.photos && formData.photos.length > 0) {
         formData.photos.forEach((photo, index) => {
           formDataToSend.append(`photo${index + 1}`, photo);
@@ -201,7 +225,19 @@ const AddPet = () => {
       console.log('Submitting pet data:', petData);
 
       // Добавление объявления через API
-      await addUserAd(formDataToSend);
+      if (isAuthenticated) {
+        await addUserAd(formDataToSend);
+      } else {
+        // Для незарегистрированных пользователей - прямая отправка
+        const response = await fetch('https://pets.сделай.site/api/pets/new', {
+          method: 'POST',
+          body: formDataToSend,
+        });
+        
+        if (!response.ok) {
+          throw new Error('Ошибка при добавлении объявления');
+        }
+      }
       
       // Сброс формы
       setFormData({
@@ -243,6 +279,25 @@ const AddPet = () => {
             <Card.Body className="p-5">
               <h2 className="card-title text-center mb-4">Добавить объявление о питомце</h2>
               
+              {/* Предложение войти или зарегистрироваться для незарегистрированных пользователей */}
+              {!isAuthenticated && (
+                <Alert variant="info" className="mb-4">
+                  <h5 className="alert-heading">Вы не вошли в систему</h5>
+                  <p className="mb-2">Вы можете добавить объявление без регистрации, но мы рекомендуем:</p>
+                  <div className="d-flex gap-2 mt-3">
+                    <Button as={Link} to="/login" variant="dark" size="sm">
+                      Войти
+                    </Button>
+                    <Button as={Link} to="/registration" variant="outline-dark" size="sm">
+                      Зарегистрироваться
+                    </Button>
+                  </div>
+                  <p className="mt-3 mb-0">
+                    <small>Если вы зарегистрируетесь, ваши контактные данные будут сохранены для будущих объявлений.</small>
+                  </p>
+                </Alert>
+              )}
+              
               {apiError && <Alert variant="danger" className="mb-3">{apiError}</Alert>}
               
               <Form onSubmit={handleSubmit}>
@@ -257,7 +312,7 @@ const AddPet = () => {
                         value={formData.userName}
                         onChange={handleChange}
                         isInvalid={!!errors.userName}
-                        disabled={isAuthenticated || loading}
+                        disabled={loading}
                         placeholder="Ваше имя"
                       />
                       <Form.Control.Feedback type="invalid">
@@ -272,7 +327,7 @@ const AddPet = () => {
                         value={formData.userPhone}
                         onChange={handleChange}
                         isInvalid={!!errors.userPhone}
-                        disabled={isAuthenticated || loading}
+                        disabled={loading}
                         placeholder="+7 (XXX) XXX-XX-XX"
                       />
                       <Form.Control.Feedback type="invalid">
@@ -289,7 +344,7 @@ const AddPet = () => {
                       value={formData.userEmail}
                       onChange={handleChange}
                       isInvalid={!!errors.userEmail}
-                      disabled={isAuthenticated || loading}
+                      disabled={loading}
                       placeholder="example@mail.ru"
                     />
                     <Form.Control.Feedback type="invalid">
@@ -400,12 +455,14 @@ const AddPet = () => {
                   </Row>
                   
                   <div className="mb-3">
-                    <Form.Label className="required-field">Фотографии животного (до 3 фото)</Form.Label>
+                    <Form.Label className="required-field">
+                      Фотографии животного (минимум 1, максимум 3, ТОЛЬКО PNG)
+                    </Form.Label>
                     <Form.Control
                       type="file"
                       name="photos"
                       onChange={handleChange}
-                      accept="image/*"
+                      accept=".png,image/png"
                       multiple
                       isInvalid={!!errors.photos}
                       disabled={loading}
@@ -413,19 +470,52 @@ const AddPet = () => {
                     <Form.Control.Feedback type="invalid">
                       {errors.photos}
                     </Form.Control.Feedback>
-                    <div className="form-text">Выберите до 3 фотографий животного (JPG, PNG).</div>
+                    <div className="form-text">
+                      Выберите от 1 до 3 фотографий животного в формате PNG. Первая фотография обязательна.
+                    </div>
                     
                     {photoPreviews.length > 0 && (
-                      <div className="mt-2">
-                        {photoPreviews.map((preview, index) => (
-                          <img 
-                            key={index} 
-                            src={preview} 
-                            alt={`Preview ${index}`} 
-                            className="photo-preview me-2" 
-                            style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '5px' }}
-                          />
-                        ))}
+                      <div className="mt-3">
+                        <h6>Выбранные фотографии:</h6>
+                        <div className="d-flex flex-wrap gap-2">
+                          {photoPreviews.map((preview, index) => (
+                            <div key={index} className="position-relative" style={{ width: '100px' }}>
+                              <img 
+                                src={preview} 
+                                alt={`Preview ${index + 1}`} 
+                                className="photo-preview" 
+                                style={{ 
+                                  width: '100px', 
+                                  height: '100px', 
+                                  objectFit: 'cover', 
+                                  borderRadius: '5px',
+                                  border: index === 0 ? '2px solid #007bff' : '1px solid #ddd'
+                                }}
+                              />
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                className="position-absolute top-0 end-0"
+                                style={{ transform: 'translate(50%, -50%)' }}
+                                onClick={() => removePhoto(index)}
+                                disabled={loading}
+                              >
+                                ×
+                              </Button>
+                              {index === 0 && (
+                                <div className="position-absolute bottom-0 start-0 end-0 bg-primary text-white text-center py-1">
+                                  <small>Основное</small>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2">
+                          <small className="text-muted">
+                            Загружено: {photoPreviews.length} из 3 фотографий
+                            {photoPreviews.length < 1 && ' (требуется хотя бы 1 фотография)'}
+                          </small>
+                        </div>
                       </div>
                     )}
                   </div>
