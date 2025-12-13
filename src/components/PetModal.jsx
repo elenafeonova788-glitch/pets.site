@@ -1,6 +1,7 @@
+// Файл: components/PetModal.jsx
 import React from 'react';
 import { Modal, Carousel, Row, Col, Button, Badge } from 'react-bootstrap';
-import { getAnimalType, getDistrictName } from '../utils/helpers';
+import { getAnimalType, getDistrictName, getAllPetImages } from '../utils/helpers';
 
 const PetModal = ({ pet, show, onHide }) => {
   if (!pet) {
@@ -9,6 +10,8 @@ const PetModal = ({ pet, show, onHide }) => {
 
   const isFromAPI = pet.originalData && !pet.userAdded;
   const isLegacy = pet.isLegacy;
+  
+  const images = getAllPetImages(pet);
   
   const getPetPageURL = () => {
     if (isLegacy && pet.originalData) {
@@ -36,15 +39,22 @@ const PetModal = ({ pet, show, onHide }) => {
       </Modal.Header>
       <Modal.Body>
         <div id="petDetailsContent">
-          {pet.photos && pet.photos.length > 0 ? (
+          {images.length > 0 ? (
             <Carousel className="pet-details-carousel mb-3">
-              {pet.photos.map((photo, index) => (
+              {images.map((photo, index) => (
                 <Carousel.Item key={index}>
                   <img 
                     src={photo} 
                     className="d-block w-100" 
                     alt={`Фото животного ${index + 1}`} 
-                    style={{ height: '300px', objectFit: 'cover' }}
+                    style={{ 
+                      height: '300px', 
+                      objectFit: 'cover',
+                      backgroundColor: '#f5f5f5'
+                    }}
+                    onError={(e) => {
+                      e.target.src = 'https://via.placeholder.com/600x400?text=Нет+фото';
+                    }}
                   />
                 </Carousel.Item>
               ))}
@@ -65,7 +75,8 @@ const PetModal = ({ pet, show, onHide }) => {
               <p><strong>Район:</strong> {getDistrictName(pet.district)}</p>
             </Col>
             <Col md={6}>
-              <p><strong>Дата:</strong> {pet.date}</p>
+              <p><strong>Дата:</strong> {pet.date || 'Не указана'}</p>
+              <p><strong>Клеймо:</strong> {pet.mark || 'Не указано'}</p>
               <p><strong>Контактное лицо:</strong> {pet.author || pet.userName || 'Не указано'}</p>
               <p><strong>Телефон:</strong> {pet.userPhone || 'Не указан'}</p>
               <p><strong>Email:</strong> {pet.userEmail || 'Не указан'}</p>
@@ -76,12 +87,6 @@ const PetModal = ({ pet, show, onHide }) => {
             <p><strong>Описание:</strong></p>
             <p>{pet.description || 'Нет описания'}</p>
           </div>
-          
-          {pet.mark && (
-            <div className="mt-2">
-              <p><strong>Клеймо/Метка:</strong> {pet.mark}</p>
-            </div>
-          )}
           
           {(isFromAPI || isLegacy) && (
             <div className="mt-3 p-2 bg-light rounded">

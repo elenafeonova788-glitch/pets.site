@@ -1,3 +1,4 @@
+/* Основные стили */
 :root {
   --primary-color: #556b2f;
   --secondary-color: #708090;
@@ -11,9 +12,17 @@ body {
   background-color: var(--light-color);
   color: var(--text-color);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-.navbar {
+main {
+  flex: 1;
+}
+
+/* Навигация */
+.custom-navbar {
   background-color: var(--dark-color) !important;
 }
 
@@ -22,10 +31,11 @@ body {
 }
 
 .nav-link.active {
-  color: var(--accent-color) !important;
+  color: #ffc107 !important;
   font-weight: bold;
 }
 
+/* Кнопки */
 .btn-primary {
   background-color: var(--primary-color);
   border-color: var(--primary-color);
@@ -46,6 +56,27 @@ body {
   color: white;
 }
 
+.btn-dark {
+  background-color: var(--dark-color);
+  border-color: var(--dark-color);
+}
+
+.btn-dark:hover {
+  background-color: #1c2f2f;
+  border-color: #1c2f2f;
+}
+
+.btn-outline-light {
+  color: white;
+  border-color: white;
+}
+
+.btn-outline-light:hover {
+  background-color: white;
+  color: #2f4f4f;
+}
+
+/* Карточки */
 .card {
   transition: transform 0.3s, box-shadow 0.3s;
   border: none;
@@ -59,21 +90,30 @@ body {
   box-shadow: 0 10px 20px rgba(0,0,0,0.1);
 }
 
-.section-title {
-  color: var(--dark-color);
-  border-bottom: 2px solid var(--accent-color);
-  padding-bottom: 10px;
-  margin-bottom: 20px;
-  font-weight: 600;
+/* Карточки поиска */
+.search-result-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #ddd;
 }
 
-.carousel-image {
-  height: 500px;
+.search-result-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.pet-image-preview {
+  height: 150px;
   object-fit: cover;
-  width: 100%;
+  border-radius: 5px;
 }
 
-/* Исправленная карусель для мобильных устройств */
+.search-results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Карусель */
 .carousel-full-width {
   margin-left: 0;
   margin-right: 0;
@@ -107,7 +147,12 @@ body {
   }
 }
 
-/* Адаптивная высота карусели для мобильных */
+.carousel-image {
+  height: 400px;
+  object-fit: cover;
+  width: 100%;
+}
+
 @media (max-width: 768px) {
   .carousel-image {
     height: 300px;
@@ -120,52 +165,50 @@ body {
   }
 }
 
+/* Карточки животных на главной */
 .pet-card-image {
   height: 200px;
   object-fit: cover;
   width: 100%;
 }
 
+/* Логотип */
 .logo-img {
-  height: 50px;
+  height: 40px;
   width: auto;
 }
 
+/* Аватар профиля */
 .profile-avatar {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+}
+
+/* Препросмотр фотографий */
+.photo-preview {
   width: 100px;
   height: 100px;
   object-fit: cover;
+  border-radius: 5px;
+  margin-right: 10px;
+  margin-bottom: 10px;
 }
 
-.pet-image-preview {
-  height: 120px;
-  object-fit: cover;
-  width: 100%;
-}
-
-.page {
-  display: none;
-}
-
-.page.active {
-  display: block;
-}
-
-.hidden {
-  display: none !important;
-}
-
+/* Обязательные поля */
 .required-field::after {
   content: " *";
   color: #dc3545;
 }
 
+/* Выделение поиска */
 .search-highlight {
   background-color: #fff3cd;
   padding: 2px 4px;
   border-radius: 3px;
 }
 
+/* Бейджи статусов */
 .pet-status-badge {
   position: absolute;
   top: 10px;
@@ -173,25 +216,31 @@ body {
   z-index: 10;
 }
 
+/* Нет результатов */
 .no-results {
   text-align: center;
   padding: 40px 20px;
   color: #6c757d;
 }
 
+/* Формы */
 .form-control:focus {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 0.2rem rgba(143, 188, 143, 0.25);
 }
 
+/* Алерты */
 .alert-custom {
   border-left: 4px solid var(--accent-color);
 }
 
+/* Футер */
 footer {
   background-color: var(--dark-color) !important;
+  margin-top: auto;
 }
 
+/* Валидация */
 .invalid-feedback {
   display: none;
   color: #dc3545;
@@ -208,12 +257,14 @@ footer {
   border-color: #dc3545;
 }
 
+/* Ошибки API */
 .api-error {
   color: #dc3545;
   font-size: 0.875em;
   margin-top: 0.25rem;
 }
 
+/* Переключение пароля */
 .password-toggle {
   cursor: pointer;
   position: absolute;
@@ -222,10 +273,12 @@ footer {
   transform: translateY(-50%);
 }
 
+/* Дропдауны */
 .dropdown-toggle::after {
   margin-left: 0.5em;
 }
 
+/* Модальные окна с деталями животного */
 .pet-details-carousel {
   height: 400px;
 }
@@ -236,6 +289,7 @@ footer {
   width: 100%;
 }
 
+/* Формы редактирования */
 .edit-form {
   background-color: #f8f9fa;
   padding: 20px;
@@ -243,15 +297,7 @@ footer {
   margin-bottom: 20px;
 }
 
-.photo-preview {
-  width: 100px;
-  height: 100px;
-  object-fit: cover;
-  border-radius: 5px;
-  margin-right: 10px;
-  margin-bottom: 10px;
-}
-
+/* Подсказки поиска */
 .search-suggestions {
   position: absolute;
   z-index: 1000;
@@ -273,7 +319,7 @@ footer {
   background-color: #f8f9fa;
 }
 
-/* Стили для пагинации */
+/* Пагинация */
 .pagination-container {
   display: flex;
   justify-content: center;
@@ -286,36 +332,33 @@ footer {
   color: #6c757d;
 }
 
-/* Новые стили для горизонтального расположения результатов поиска */
-.search-results-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+/* Исправляем пагинацию */
+.pagination {
+  margin-bottom: 0;
 }
 
-.search-result-card {
-  height: 100%;
-}
-/* Добавьте в ваш основной файл CSS */
-.suggestions-dropdown {
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 1000;
+.page-link {
+  color: #2f4f4f;
+  border: 1px solid #dee2e6;
 }
 
-.suggestion-item:hover {
-  background-color: #f8f9fa;
+.page-item.active .page-link {
+  background-color: #2f4f4f;
+  border-color: #2f4f4f;
 }
 
-.hover-bg-light:hover {
-  background-color: #f8f9fa !important;
-}
-
-.position-relative {
-  position: relative;
-}
-/* Стили для выравнивания названия сайта в навигации */
-.navbar-brand {
-  display: flex;
-  align-items: center;
+/* Адаптивные исправления */
+@media (max-width: 768px) {
+  .search-results-container .row {
+    margin: 0;
+  }
+  
+  .pet-image-preview {
+    height: 120px;
+  }
+  
+  .search-result-card .col-md-4,
+  .search-result-card .col-md-8 {
+    padding: 0;
+  }
 }

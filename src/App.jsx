@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Container, Alert } from 'react-bootstrap';
@@ -23,6 +22,7 @@ function AppContent() {
   const [error, setError] = useState('');
 
   const showPetDetails = (pet) => {
+    console.log('App: Opening pet modal for:', pet);
     if (pet) {
       setSelectedPet(pet);
       setShowPetModal(true);
@@ -62,7 +62,9 @@ function AppContent() {
 
   return (
     <>
-      <Header />
+      {/* ПЕРЕДАЕМ ФУНКЦИЮ showPetDetails В HEADER */}
+      <Header showPetDetails={showPetDetails} />
+      
       <Container className="my-4">
         {error && (
           <Alert variant="danger" onClose={() => setError('')} dismissible>
@@ -74,9 +76,7 @@ function AppContent() {
           <Route path="/search" element={<Search showPetDetails={showPetDetails} />} />
           <Route 
             path="/add-pet" 
-            element={
-              isAuthenticated ? <AddPet /> : <Navigate to="/login" replace />
-            } 
+            element={<AddPet />}
           />
           <Route 
             path="/profile" 

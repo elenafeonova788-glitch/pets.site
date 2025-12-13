@@ -23,12 +23,26 @@ const Login = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-    setApiError('');
-    setErrors({});
+    
+    // Очищаем ошибки при изменении
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+    
+    if (apiError) {
+      setApiError('');
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('=== LOGIN FORM SUBMIT ===');
+    
+    // Валидация
     const newErrors = {};
 
     if (!formData.email.trim()) {
@@ -42,6 +56,7 @@ const Login = () => {
     }
 
     if (Object.keys(newErrors).length > 0) {
+      console.log('Form validation errors:', newErrors);
       setErrors(newErrors);
       return;
     }
@@ -49,57 +64,66 @@ const Login = () => {
     try {
       setLoading(true);
       setApiError('');
+      setErrors({});
       
       const credentials = {
-        email: formData.email,
-        password: formData.password,
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password
       };
 
-      console.log('Attempting login with:', credentials);
+      console.log('Attempting login with:', { ...credentials, password: '***' });
+      
       await login(credentials);
-      navigate('/');
+      console.log('Login successful, navigating to home');
+      
+      // Перенаправляем на главную
+      navigate('/', { replace: true });
       
     } catch (error) {
-      console.error('Login error:', error);
-      const errorMessage = error.message || error.toString();
-      setApiError(errorMessage || 'Ошибка при входе. Проверьте email и пароль.');
+      console.error('=== LOGIN ERROR ===');
+      console.error('Error:', error);
+      
+      let errorMessage = error.message || 'Ошибка при входе';
+      
+      // Улучшаем сообщения об ошибках
+      if (errorMessage.includes('Invalid credentials') || 
+          errorMessage.includes('401') || 
+          errorMessage.includes('неверный')) {
+        errorMessage = 'Неверный email или пароль';
+        setErrors({
+          email: 'Неверный email или пароль',
+          password: 'Неверный email или пароль'
+        });
+      } else if (errorMessage.includes('email')) {
+        setErrors({ email: errorMessage });
+      } else if (errorMessage.includes('password')) {
+        setErrors({ password: errorMessage });
+      }
+      
+      setApiError(errorMessage);
+      
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTestLogin = () => {
-    setFormData({
-      email: 'test@example.com',
-      password: 'Password123',
-      rememberMe: false
-    });
-  };
-
   return (
     <Container>
       <Row className="justify-content-center">
-        <Col md={6}>
+        <Col md={8} lg={6}>
           <Card className="shadow">
-            <Card.Body className="p-5">
+            <Card.Body className="p-4">
               <h2 className="card-title text-center mb-4">Вход в систему</h2>
               
               {apiError && (
                 <Alert variant="danger" className="mb-3">
-                  {typeof apiError === 'string' ? apiError : JSON.stringify(apiError)}
+                  <Alert.Heading>Ошибка входа</Alert.Heading>
+                  <p className="mb-0">{apiError}</p>
                 </Alert>
               )}
               
               <Form onSubmit={handleSubmit}>
-                <Button 
-                  variant="outline-secondary" 
-                  className="w-100 mb-3" 
-                  onClick={handleTestLogin}
-                  disabled={loading}
-                >
-                  Использовать тестовые данные
-                </Button>
-                
                 <Form.Group className="mb-3">
                   <Form.Label className="required-field">Email</Form.Label>
                   <Form.Control
@@ -132,7 +156,7 @@ const Login = () => {
                   </Form.Control.Feedback>
                 </Form.Group>
 
-                <Form.Group className="mb-3">
+                <Form.Group className="mb-4">
                   <Form.Check
                     type="checkbox"
                     id="rememberMe"
@@ -147,7 +171,7 @@ const Login = () => {
                 <Button 
                   type="submit" 
                   variant="primary" 
-                  className="w-100 mb-3" 
+                  className="w-100 py-2 mb-3" 
                   disabled={loading}
                 >
                   {loading ? (
@@ -159,14 +183,26 @@ const Login = () => {
                 </Button>
 
                 <div className="text-center">
-                  <p>
+                  <p className="mb-0">
                     Нет аккаунта?{' '}
-                    <Link to="/registration">Зарегистрироваться</Link>
+                    <Link to="/registration" className="text-decoration-none">
+                      Зарегистрироваться
+                    </Link>
                   </p>
                 </div>
               </Form>
             </Card.Body>
           </Card>
+          
+          <div className="mt-4 text-center">
+            <p className="text-muted small">
+              <strong>Тестовые данные для входа из ТЗ:</strong><br/>
+              Телефон: 89111234567<br/>
+              Пароль: Password123<br/>
+              <br/>
+              <strong>Или создайте нового пользователя через регистрацию</strong>
+            </p>
+          </div>
         </Col>
       </Row>
     </Container>

@@ -1,41 +1,54 @@
-// src/utils/constants.js
+export const districts = {
+  'admiralteyskiy': 'Адмиралтейский',
+  'vasileostrovskiy': 'Василеостровский',
+  'vyborgskiy': 'Выборгский',
+  'kalininskiy': 'Калининский',
+  'kirovskiy': 'Кировский',
+  'kolpinskiy': 'Колпинский',
+  'krasnogvardeyskiy': 'Красногвардейский',
+  'krasnoselskiy': 'Красносельский',
+  'kronshtadtskiy': 'Кронштадтский',
+  'kurortnyy': 'Курортный',
+  'moskovskiy': 'Московский',
+  'nevskiy': 'Невский',
+  'petrogradskiy': 'Петроградский',
+  'petrodvortsovyy': 'Петродворцовый',
+  'primorskiy': 'Приморский',
+  'pushkinskiy': 'Пушкинский',
+  'frunzenskiy': 'Фрунзенский',
+  'tsentralnyy': 'Центральный'
+};
+
 export const animalTypes = {
   'кошка': 'Кошка',
   'собака': 'Собака',
   'птица': 'Птица',
   'грызун': 'Грызун',
+  'лошадь': 'Лошадь',
+  'попугай': 'Попугай',
   'другое': 'Другое'
 };
 
-export const districts = {
-  '1': 'Адмиралтейский район',
-  '2': 'Василеостровский район',
-  '3': 'Выборгский район',
-  '4': 'Калининский район',
-  '5': 'Кировский район',
-  '6': 'Колпинский район',
-  '7': 'Красногвардейский район',
-  '8': 'Красносельский район',
-  '9': 'Кронштадтский район',
-  '10': 'Курортный район',
-  '11': 'Московский район',
-  '12': 'Невский район',
-  '13': 'Петроградский район',
-  '14': 'Петродворцовый район',
-  '15': 'Приморский район',
-  '16': 'Пушкинский район',
-  '17': 'Фрунзенский район',
-  '18': 'Центральный район'
-};
+export const petTypes = [
+  { value: 'кошка', label: 'Кошка' },
+  { value: 'собака', label: 'Собака' },
+  { value: 'птица', label: 'Птица' },
+  { value: 'грызун', label: 'Грызун' },
+  { value: 'лошадь', label: 'Лошадь' },
+  { value: 'попугай', label: 'Попугай' },
+  { value: 'другое', label: 'Другое' }
+];
 
-export const API_ENDPOINTS = {
-  BASE: 'https://pets.сделай.site/api',
-  SLIDER: '/pets/slider',
-  PETS: '/pets',
-  SEARCH: '/search',
-  REGISTER: '/register',
-  LOGIN: '/login',
-  USERS: '/users',
-  USER_ORDERS: '/users/orders',
-  SUBSCRIPTION: '/subscription'
+
+
+export const petStatusOptions = [
+  { value: 'found', label: 'Найден' },
+  { value: 'lost', label: 'Потерян' }
+];
+
+export const statuses = {
+  'active': 'Активно',
+  'onModeration': 'На модерации',
+  'wasFound': 'Хозяин найден',
+  'archive': 'В архиве'
 };
