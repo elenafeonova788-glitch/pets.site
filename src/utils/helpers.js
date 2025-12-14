@@ -7,17 +7,19 @@ export const validateEmail = (email) => {
 };
 
 export const validatePhone = (phone) => {
+  // Разрешаем цифры, пробелы, скобки, дефисы и знак +
   const re = /^[\+]?[0-9\s\-\(\)]+$/;
   return re.test(phone);
 };
 
 export const validateName = (name) => {
+  // Только кириллица, пробел и дефис
   const re = /^[а-яА-ЯёЁ\s\-]+$/;
   return re.test(name);
 };
 
 export const validatePassword = (password) => {
-  // Минимум 7 символов, хотя бы 1 цифра, 1 строчная и 1 заглавная буква
+  // Минимум 7 символов, хотя бы 1 цифра, 1 строчная и 1 заглавная буква (латинские)
   const re = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{7,}$/;
   return re.test(password);
 };

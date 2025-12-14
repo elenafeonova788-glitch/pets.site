@@ -93,7 +93,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Вход в систему
+  // Вход в систему - ОБНОВЛЕНО ПО ТЗ
   const login = async (credentials) => {
     try {
       setLoading(true);
@@ -115,27 +115,34 @@ export const AuthProvider = ({ children }) => {
       }
       
       if (!authToken) {
-        console.warn('No token in response, creating temp token');
-        authToken = 'temp-token-' + Date.now();
+        console.error('No token in response');
+        throw new Error('Токен не получен от сервера');
       }
       
       console.log('Setting token:', authToken);
       localStorage.setItem('token', authToken);
       setToken(authToken);
       
-      // Создаем временного пользователя
-      const tempUser = {
-        id: 1,
-        name: credentials.email?.split('@')[0] || 'Пользователь',
+      // Создаем пользователя
+      const user = {
+        id: Date.now(),
+        name: credentials.name || credentials.email?.split('@')[0] || 'Пользователь',
         email: credentials.email,
-        phone: '',
+        phone: credentials.phone || '',
         regDate: new Date().toISOString().split('T')[0],
         daysOnSite: '1 день',
         completedAds: 0,
         incompleteAds: 0,
       };
       
-      setCurrentUser(tempUser);
+      setCurrentUser(user);
+      
+      // Сохраняем данные в localStorage
+      localStorage.setItem('userEmail', user.email);
+      localStorage.setItem('userName', user.name);
+      localStorage.setItem('userPhone', user.phone);
+      localStorage.setItem('userRegDate', user.regDate);
+      
       setUserAds([]);
       
       return { success: true, data: response };
@@ -146,9 +153,16 @@ export const AuthProvider = ({ children }) => {
       
       let errorMessage = error.message || 'Ошибка при входе';
       
-      // Улучшаем сообщения об ошибках
-      if (errorMessage.includes('Invalid credentials') || 
-          errorMessage.includes('401') || 
+      // Улучшаем сообщения об ошибках по ТЗ
+      if (error.status === 401) {
+        errorMessage = 'Неверный email или пароль';
+      } else if (error.status === 422) {
+        if (error.validationErrors && error.validationErrors.phone) {
+          errorMessage = 'Неверный email или пароль';
+        } else {
+          errorMessage = 'Ошибка валидации данных';
+        }
+      } else if (errorMessage.includes('Invalid credentials') || 
           errorMessage.includes('Unauthorized')) {
         errorMessage = 'Неверный email или пароль';
       } else if (errorMessage.includes('email')) {
@@ -163,36 +177,98 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Регистрация
+  // Регистрация - ОБНОВЛЕНО: автоматический вход после регистрации
   const register = async (userData) => {
     try {
       setLoading(true);
       console.log('=== REGISTRATION ATTEMPT ===');
       console.log('User data:', { ...userData, password: '***', password_confirmation: '***' });
       
+      // 1. Регистрация
       const response = await usersAPI.register(userData);
       console.log('Registration API response:', response);
       
-      // После успешной регистрации создаем временную сессию
-      const tempToken = 'temp-token-' + Date.now();
-      localStorage.setItem('token', tempToken);
-      setToken(tempToken);
+      // 2. После успешной регистрации автоматически входим
+      console.log('=== AUTO LOGIN AFTER REGISTRATION ===');
       
-      const tempUser = {
-        id: Date.now(),
-        name: userData.name,
-        email: userData.email,
-        phone: userData.phone,
-        regDate: new Date().toISOString().split('T')[0],
-        daysOnSite: '1 день',
-        completedAds: 0,
-        incompleteAds: 0,
-      };
-      
-      setCurrentUser(tempUser);
-      setUserAds([]);
-      
-      return { success: true, data: response };
+      try {
+        const loginResponse = await usersAPI.login({
+          email: userData.email,
+          password: userData.password
+        });
+        
+        console.log('Auto login response:', loginResponse);
+        
+        // Сохраняем токен
+        let authToken = null;
+        if (loginResponse.data && loginResponse.data.token) {
+          authToken = loginResponse.data.token;
+        } else if (loginResponse.token) {
+          authToken = loginResponse.token;
+        } else if (loginResponse.data && loginResponse.data.access_token) {
+          authToken = loginResponse.data.access_token;
+        }
+        
+        if (authToken) {
+          localStorage.setItem('token', authToken);
+          setToken(authToken);
+        }
+        
+        // Создаем пользователя
+        const user = {
+          id: Date.now(),
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone,
+          regDate: new Date().toISOString().split('T')[0],
+          daysOnSite: '1 день',
+          completedAds: 0,
+          incompleteAds: 0,
+        };
+        
+        setCurrentUser(user);
+        
+        // Сохраняем данные в localStorage
+        localStorage.setItem('userEmail', user.email);
+        localStorage.setItem('userName', user.name);
+        localStorage.setItem('userPhone', user.phone);
+        localStorage.setItem('userRegDate', user.regDate);
+        
+        setUserAds([]);
+        
+        console.log('Registration and auto login successful');
+        return { success: true, data: response };
+        
+      } catch (loginError) {
+        console.error('Auto login failed, but registration was successful:', loginError);
+        
+        // Регистрация успешна, но вход не удался
+        // Создаем пользователя в любом случае
+        const user = {
+          id: Date.now(),
+          name: userData.name,
+          email: userData.email,
+          phone: userData.phone,
+          regDate: new Date().toISOString().split('T')[0],
+          daysOnSite: '1 день',
+          completedAds: 0,
+          incompleteAds: 0,
+        };
+        
+        setCurrentUser(user);
+        
+        // Сохраняем данные в localStorage
+        localStorage.setItem('userEmail', user.email);
+        localStorage.setItem('userName', user.name);
+        localStorage.setItem('userPhone', user.phone);
+        localStorage.setItem('userRegDate', user.regDate);
+        
+        return { 
+          success: true, 
+          data: response,
+          message: 'Регистрация успешна! Однако автоматический вход не удался. Пожалуйста, войдите в систему.'
+        };
+      }
       
     } catch (error) {
       console.error('=== REGISTRATION ERROR ===');
@@ -200,19 +276,23 @@ export const AuthProvider = ({ children }) => {
       
       let errorMessage = error.message;
       
-      // Форматируем ошибки для пользователя
-      if (errorMessage.includes('already been taken') || errorMessage.includes('already')) {
-        errorMessage = 'Этот email уже зарегистрирован';
-      } else if (errorMessage.includes('Validation error')) {
-        // Пытаемся извлечь детальные ошибки
-        if (error.data && error.data.errors) {
-          const errors = error.data.errors;
-          if (errors.email) {
-            errorMessage = 'Email уже зарегистрирован или неверный формат';
-          } else if (errors.phone) {
-            errorMessage = 'Неверный формат телефона';
-          } else if (errors.password) {
-            errorMessage = 'Пароль должен содержать минимум 8 символов, цифры, строчные и заглавные буквы';
+      // Обработка ошибок валидации от сервера по ТЗ
+      if (error.status === 422) {
+        if (error.validationErrors) {
+          // Форматируем ошибки для пользователя
+          const formattedErrors = [];
+          for (const [field, errors] of Object.entries(error.validationErrors)) {
+            if (Array.isArray(errors)) {
+              errors.forEach(err => formattedErrors.push(`${field}: ${err}`));
+            } else if (typeof errors === 'string') {
+              formattedErrors.push(`${field}: ${errors}`);
+            }
+          }
+          
+          if (formattedErrors.length > 0) {
+            errorMessage = formattedErrors.join('; ');
+          } else {
+            errorMessage = 'Ошибка валидации данных';
           }
         } else {
           errorMessage = 'Ошибка валидации данных';
@@ -229,6 +309,10 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     console.log('Logging out');
     localStorage.removeItem('token');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userPhone');
+    localStorage.removeItem('userRegDate');
     setToken(null);
     setCurrentUser(null);
     setUserAds([]);
@@ -240,10 +324,17 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       
       // Обновляем локально
-      setCurrentUser(prev => ({
-        ...prev,
+      const updatedUser = {
+        ...currentUser,
         ...updatedData,
-      }));
+      };
+      
+      setCurrentUser(updatedUser);
+      
+      // Сохраняем в localStorage для сохранения данных
+      if (updatedData.name) localStorage.setItem('userName', updatedData.name);
+      if (updatedData.email) localStorage.setItem('userEmail', updatedData.email);
+      if (updatedData.phone) localStorage.setItem('userPhone', updatedData.phone);
       
       return { success: true };
       

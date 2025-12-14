@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Button, Card, Container, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,20 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Загружаем сохраненные данные при монтировании
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('userEmail');
+    const savedName = localStorage.getItem('userName');
+    const savedPhone = localStorage.getItem('userPhone');
+    
+    if (savedEmail) {
+      setFormData(prev => ({
+        ...prev,
+        email: savedEmail
+      }));
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -66,18 +80,31 @@ const Login = () => {
       setApiError('');
       setErrors({});
       
+      // Получаем сохраненные данные для передачи в login
+      const savedName = localStorage.getItem('userName') || '';
+      const savedPhone = localStorage.getItem('userPhone') || '';
+      
       const credentials = {
         email: formData.email.trim().toLowerCase(),
-        password: formData.password
+        password: formData.password,
+        name: savedName,
+        phone: savedPhone
       };
 
       console.log('Attempting login with:', { ...credentials, password: '***' });
       
       await login(credentials);
-      console.log('Login successful, navigating to home');
+      console.log('Login successful, navigating to profile');
       
-      // Перенаправляем на главную
-      navigate('/', { replace: true });
+      // Если стоит флаг "запомнить меня", сохраняем данные
+      if (formData.rememberMe) {
+        localStorage.setItem('userEmail', credentials.email);
+        localStorage.setItem('userName', credentials.name);
+        localStorage.setItem('userPhone', credentials.phone);
+      }
+      
+      // Перенаправляем в личный кабинет
+      navigate('/profile', { replace: true });
       
     } catch (error) {
       console.error('=== LOGIN ERROR ===');
@@ -85,10 +112,21 @@ const Login = () => {
       
       let errorMessage = error.message || 'Ошибка при входе';
       
-      // Улучшаем сообщения об ошибках
-      if (errorMessage.includes('Invalid credentials') || 
-          errorMessage.includes('401') || 
-          errorMessage.includes('неверный')) {
+      // Улучшаем сообщения об ошибках по ТЗ
+      if (error.status === 401) {
+        errorMessage = 'Неверный email или пароль';
+        setErrors({
+          email: 'Неверный email или пароль',
+          password: 'Неверный email или пароль'
+        });
+      } else if (error.status === 422) {
+        errorMessage = 'Неверный email или пароль';
+        setErrors({
+          email: 'Неверный email или пароль',
+          password: 'Неверный email или пароль'
+        });
+      } else if (errorMessage.includes('Invalid credentials') || 
+          errorMessage.includes('Unauthorized')) {
         errorMessage = 'Неверный email или пароль';
         setErrors({
           email: 'Неверный email или пароль',
@@ -106,6 +144,17 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Автозаполнение для тестовых данных
+  const fillTestData = () => {
+    setFormData({
+      email: 'user@user.ru',
+      password: 'paSSword1',
+      rememberMe: false
+    });
+    setErrors({});
+    setApiError('');
   };
 
   return (
@@ -191,16 +240,31 @@ const Login = () => {
                   </p>
                 </div>
               </Form>
+              
+              <div className="text-center mt-3">
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm" 
+                  onClick={fillTestData}
+                  disabled={loading}
+                >
+                  Заполнить тестовые данные
+                </Button>
+              </div>
             </Card.Body>
           </Card>
           
           <div className="mt-4 text-center">
             <p className="text-muted small">
-              <strong>Тестовые данные для входа из ТЗ:</strong><br/>
-              Телефон: 89111234567<br/>
-              Пароль: Password123<br/>
+              <strong>Тестовые данные из ТЗ:</strong><br/>
+              Email: user@user.ru<br/>
+              Пароль: paSSword1<br/>
               <br/>
-              <strong>Или создайте нового пользователя через регистрацию</strong>
+              <strong>После входа:</strong><br/>
+              Вы попадете в личный кабинет, где сможете:<br/>
+              1. Управлять своими данными<br/>
+              2. Добавлять и редактировать объявления<br/>
+              3. Просматривать историю действий
             </p>
           </div>
         </Col>

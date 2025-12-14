@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Button, Card, Container, Row, Col, Alert, Spinner, Collapse } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
@@ -12,9 +12,9 @@ const AddPet = () => {
   
   const [formData, setFormData] = useState({
     // Контактная информация
-    userName: isAuthenticated && currentUser ? (currentUser.name || '') : '',
-    userPhone: isAuthenticated && currentUser ? (currentUser.phone || '') : '',
-    userEmail: isAuthenticated && currentUser ? (currentUser.email || '') : '',
+    userName: '',
+    userPhone: '',
+    userEmail: '',
     
     // Информация о животном
     type: '',
@@ -43,13 +43,32 @@ const AddPet = () => {
   
   const passwordRef = useRef(null);
 
-  React.useEffect(() => {
+  // Загружаем сохраненные данные из localStorage
+  useEffect(() => {
+    // Загружаем данные из localStorage
+    const savedEmail = localStorage.getItem('userEmail');
+    const savedName = localStorage.getItem('userName');
+    const savedPhone = localStorage.getItem('userPhone');
+    
+    // Если есть сохраненные данные, заполняем форму
+    if (savedEmail || savedName || savedPhone) {
+      setFormData(prev => ({
+        ...prev,
+        userEmail: savedEmail || prev.userEmail,
+        userName: savedName || prev.userName,
+        userPhone: savedPhone || prev.userPhone,
+        authEmail: savedEmail || prev.authEmail // Также заполняем поле для авторизации
+      }));
+    }
+    
+    // Если пользователь авторизован, используем данные из currentUser
     if (isAuthenticated && currentUser) {
       setFormData(prev => ({
         ...prev,
         userName: currentUser.name || '',
         userPhone: currentUser.phone || '',
-        userEmail: currentUser.email || ''
+        userEmail: currentUser.email || '',
+        authEmail: currentUser.email || ''
       }));
     }
   }, [isAuthenticated, currentUser]);
@@ -233,26 +252,38 @@ const AddPet = () => {
         try {
           if (formData.registerNewAccount) {
             // Регистрация
-            await register({
+            const registrationData = {
               name: formData.userName,
               email: formData.authEmail,
-              phone: formData.userPhone,
+              phone: formData.userPhone.replace(/\D/g, ''),
               password: formData.authPassword,
               password_confirmation: formData.authPasswordConfirmation,
               confirm: true
-            });
+            };
+            
+            const result = await register(registrationData);
+            console.log('Registration result:', result);
           } else {
             // Вход
             await login({
               email: formData.authEmail,
-              password: formData.authPassword
+              password: formData.authPassword,
+              name: formData.userName,
+              phone: formData.userPhone
             });
           }
+          
           // Обновляем email в форме после авторизации
           setFormData(prev => ({
             ...prev,
             userEmail: formData.authEmail
           }));
+          
+          // Сохраняем данные в localStorage
+          localStorage.setItem('userEmail', formData.authEmail);
+          localStorage.setItem('userName', formData.userName);
+          localStorage.setItem('userPhone', formData.userPhone);
+          
         } catch (authError) {
           console.error('Auth error:', authError);
           setApiError('Ошибка авторизации/регистрации: ' + (authError.message || 'Неверные данные'));
@@ -317,6 +348,13 @@ const AddPet = () => {
           setLoading(false);
           return;
         }
+      }
+
+      // Сохраняем данные пользователя в localStorage для будущего входа
+      if (!isAuthenticated) {
+        localStorage.setItem('userEmail', formData.userEmail);
+        localStorage.setItem('userName', formData.userName);
+        localStorage.setItem('userPhone', formData.userPhone);
       }
 
       // Сброс формы
@@ -584,7 +622,6 @@ const AddPet = () => {
                 <div className="mb-4">
                   <h5 className="mb-3">Информация о животном</h5>
                   
-                  {/* ДОБАВЛЕН ВЫБОР СТАТУСА */}
                   <Row>
                     <Col md={6} className="mb-3">
                       <Form.Label className="required-field">Статус</Form.Label>

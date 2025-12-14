@@ -48,191 +48,93 @@ const Home = ({ showPetDetails }) => {
   };
 
   // Загрузка данных
-  const loadData = useCallback(async () => {
+  // В функции loadData обновляем получение объявлений:
+const loadData = useCallback(async () => {
+  try {
+    setLoading(true);
+    setError(null);
+    
+    console.log('Loading home page data...');
+    
+    // Загружаем слайдер
     try {
-      setLoading(true);
-      setError(null);
+      const sliderResponse = await petsAPI.getSlider();
+      console.log('Slider API response:', sliderResponse);
+      const sliderData = transformPetData(sliderResponse, 'slider');
+      debugAPIData(sliderData, 'slider');
       
-      console.log('Loading home page data...');
-      
-      // Загружаем слайдер
-      try {
-        const sliderResponse = await petsAPI.getSlider();
-        console.log('Slider API response:', sliderResponse);
-        const sliderData = transformPetData(sliderResponse, 'slider');
-        debugAPIData(sliderData, 'slider'); // Отладка данных слайдера
+      if (sliderData.pets && sliderData.pets.length > 0) {
+        console.log('Slider pets with images:');
+        sliderData.pets.forEach((pet, index) => {
+          console.log(`Pet ${index} (${pet.type}):`, {
+            id: pet.id,
+            type: pet.type,
+            photos: pet.photos,
+            originalData: pet.originalData
+          });
+        });
         
-        // Отладка: выводим информацию о фотографиях
-        if (sliderData.pets && sliderData.pets.length > 0) {
-          console.log('Slider pets with images:');
-          sliderData.pets.forEach((pet, index) => {
-            console.log(`Pet ${index} (${pet.type}):`, {
-              id: pet.id,
-              type: pet.type,
-              photos: pet.photos,
-              originalData: pet.originalData
-            });
-          });
-          
-          const carouselWithImages = sliderData.pets.map(pet => {
-            // Обеспечиваем наличие изображения
-            const imageUrl = getFirstPetImage(pet) || 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80';
-            console.log(`Carousel image for pet ${pet.id}: ${imageUrl}`);
-            return {
-              ...pet,
-              image: imageUrl,
-              description: pet.description || `Найдена ${pet.type || 'животное'}`
-            };
-          });
-          setCarouselItems(carouselWithImages);
-        } else {
-          console.log('No slider data, using fallback');
-          setCarouselItems(getFallbackCarousel());
-        }
-      } catch (sliderError) {
-        console.error('Ошибка загрузки слайдера:', sliderError);
-        console.log('Using fallback carousel due to error');
+        const carouselWithImages = sliderData.pets.map(pet => {
+          const imageUrl = getFirstPetImage(pet) || 'https://images.unsplash.com/photo-1518717758536-85ae29035b6d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80';
+          console.log(`Carousel image for pet ${pet.id}: ${imageUrl}`);
+          return {
+            ...pet,
+            image: imageUrl,
+            description: pet.description || `Найдена ${pet.type || 'животное'}`
+          };
+        });
+        setCarouselItems(carouselWithImages);
+      } else {
+        console.log('No slider data, using fallback');
         setCarouselItems(getFallbackCarousel());
       }
+    } catch (sliderError) {
+      console.error('Ошибка загрузки слайдера:', sliderError);
+      setCarouselItems(getFallbackCarousel());
+    }
+    
+    // Загружаем объявления с API
+    try {
+      console.log('Fetching home ads from API...');
       
-      // ИСПРАВЛЕНИЕ: Загружаем объявления с API как в предоставленном коде
-      try {
-        console.log('Fetching home ads from API...');
+      const response = await petsAPI.getAllPets(1, 6);
+      console.log('API response for home ads:', response);
+      
+      if (response.data && response.data.pets) {
+        console.log(`Found ${response.data.pets.length} pets in API response`);
         
-        // Используем прямой запрос как в предоставленном коде
-        const response = await fetch('https://pets.сделай.site/api/pets');
+        // Преобразуем данные
+        const transformedData = transformPetData(response, 'pets');
+        const petsData = transformedData.pets || [];
         
-        if (!response.ok) {
-          throw new Error(`Ошибка загрузки: ${response.status}`);
-        }
+        // Сортируем по дате (новые первыми)
+        const sortedPets = [...petsData].sort((a, b) => {
+          const dateA = new Date(a.date || 0);
+          const dateB = new Date(b.date || 0);
+          return dateB - dateA;
+        });
         
-        const data = await response.json();
-        console.log('API response data:', data);
-        
-        // Согласно API, данные находятся в data.data.orders
-        let petsData = [];
-        
-        if (data.data && Array.isArray(data.data.orders)) {
-          console.log(`Found ${data.data.orders.length} orders in API response`);
-          
-          // Сортируем по дате (по убыванию - самые новые первыми)
-          const sortedPets = [...data.data.orders].sort((a, b) => {
-            const dateA = new Date(a.date || 0);
-            const dateB = new Date(b.date || 0);
-            return dateB - dateA; // По убыванию
-          });
-          
-          // Берем только первые 6 записей (самые новые)
-          const latestPets = sortedPets.slice(0, 6);
-          
-          // Преобразуем данные в формат, понятный PetCard
-          petsData = latestPets.map(pet => {
-            // Собираем все возможные фотографии
-            const photos = [];
-            
-            // Проверяем поле photo (в единственном числе)
-            if (pet.photo && pet.photo !== '') {
-              // Формируем полный URL изображения
-              const baseUrl = 'https://pets.сделай.site';
-              let imageUrl;
-              
-              if (pet.photo.startsWith('/storage/')) {
-                imageUrl = `${baseUrl}${pet.photo}`;
-              } else if (pet.photo.startsWith('storage/')) {
-                imageUrl = `${baseUrl}/${pet.photo}`;
-              } else if (pet.photo.startsWith('http')) {
-                imageUrl = pet.photo;
-              } else {
-                imageUrl = `${baseUrl}/storage/${pet.photo}`;
-              }
-              
-              photos.push(imageUrl);
-            }
-            
-            // Проверяем photos (во множественном числе, массив)
-            if (pet.photos && Array.isArray(pet.photos) && pet.photos.length > 0) {
-              pet.photos.forEach(photo => {
-                if (photo && photo !== '') {
-                  const baseUrl = 'https://pets.сделай.site';
-                  let imageUrl;
-                  
-                  if (photo.startsWith('/storage/')) {
-                    imageUrl = `${baseUrl}${photo}`;
-                  } else if (photo.startsWith('storage/')) {
-                    imageUrl = `${baseUrl}/${photo}`;
-                  } else if (photo.startsWith('http')) {
-                    imageUrl = photo;
-                  } else {
-                    imageUrl = `${baseUrl}/storage/${photo}`;
-                  }
-                  
-                  if (!photos.includes(imageUrl)) {
-                    photos.push(imageUrl);
-                  }
-                }
-              });
-            }
-            
-            console.log(`Pet ${pet.id} photos:`, photos);
-            
-            // Если нет фото, добавляем fallback по типу животного
-            if (photos.length === 0) {
-              const fallbackImages = {
-                'кошка': 'https://images.unsplash.com/photo-1514888286974-6d03bde4ba48?w=600&h=400&fit=crop',
-                'собака': 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=600&h=400&fit=crop',
-                'птица': 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=600&h=400&fit=crop',
-                'грызун': 'https://images.unsplash.com/photo-1504450874802-0ba2bcd9b5ae?w=600&h=400&fit=crop',
-                'лошадь': 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=600&h=400&fit=crop',
-                'попугай': 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=600&h=400&fit=crop',
-                'другое': 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600&h=400&fit=crop',
-              };
-              
-              const fallbackImage = fallbackImages[pet.kind] || 'https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600&h=400&fit=crop';
-              photos.push(fallbackImage);
-            }
-            
-            // ИСПРАВЛЕНИЕ: Берем статус из API, а не задаем жестко 'found'
-            return {
-              id: pet.id,
-              type: pet.kind || 'животное',
-              status: pet.status || 'found', // Берем статус из API
-              name: pet.name || '',
-              description: pet.description || 'Нет описания',
-              district: pet.district || '',
-              date: pet.date || '',
-              photos: photos,
-              userPhone: pet.phone || '',
-              userEmail: pet.email || '',
-              userName: pet.name || '',
-              registered: pet.registred || false,
-              mark: pet.mark || '',
-              isFromAPI: true,
-              originalData: pet,
-            };
-          });
-        } else {
-          console.log('No orders found in API response, using fallback');
-          petsData = getFallbackPets();
-        }
-        
-        console.log('Transformed pets data for home:', petsData);
-        setHomeAds(petsData);
-        
-      } catch (petsError) {
-        console.error('Ошибка загрузки объявлений:', petsError);
-        console.log('Using fallback pets due to error');
+        console.log('Transformed pets data for home:', sortedPets);
+        setHomeAds(sortedPets);
+      } else {
+        console.log('No pets data, using fallback');
         setHomeAds(getFallbackPets());
       }
       
-    } catch (error) {
-      console.error('Ошибка загрузки данных:', error);
-      setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
-      setCarouselItems(getFallbackCarousel());
+    } catch (petsError) {
+      console.error('Ошибка загрузки объявлений:', petsError);
       setHomeAds(getFallbackPets());
-    } finally {
-      setLoading(false);
     }
-  }, []);
+    
+  } catch (error) {
+    console.error('Ошибка загрузки данных:', error);
+    setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
+    setCarouselItems(getFallbackCarousel());
+    setHomeAds(getFallbackPets());
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     loadData();

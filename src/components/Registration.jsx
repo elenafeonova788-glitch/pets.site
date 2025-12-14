@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Button, Card, Container, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
-import { validateEmail, validatePhone, validateName } from '../utils/helpers';
+import { validateEmail, validatePhone, validateName, validatePassword } from '../utils/helpers';
 
 const Registration = () => {
   const [formData, setFormData] = useState({
@@ -49,20 +49,24 @@ const Registration = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    // Валидация имени
+    // Валидация имени - кириллица, пробел, дефис
     if (!formData.name.trim()) {
       newErrors.name = 'Поле обязательно для заполнения';
     } else if (!validateName(formData.name)) {
       newErrors.name = 'Допустимы только кириллица, пробел и дефис';
     }
 
-    // Валидация телефона
+    // Валидация телефона - только цифры и знак +
     if (!formData.phone.trim()) {
       newErrors.phone = 'Поле обязательно для заполнения';
     } else if (!validatePhone(formData.phone)) {
       newErrors.phone = 'Допустимы только цифры и знак +';
-    } else if (formData.phone.replace(/\D/g, '').length < 10) {
-      newErrors.phone = 'Телефон должен содержать минимум 10 цифр';
+    } else {
+      // Проверка минимальной длины телефона
+      const phoneDigits = formData.phone.replace(/\D/g, '');
+      if (phoneDigits.length < 10) {
+        newErrors.phone = 'Телефон должен содержать минимум 10 цифр';
+      }
     }
 
     // Валидация email
@@ -72,17 +76,13 @@ const Registration = () => {
       newErrors.email = 'Введите корректный email адрес';
     }
 
-    // Валидация пароля
+    // Валидация пароля - минимум 7 символов: 1 цифра, 1 строчная, 1 заглавная
     if (!formData.password) {
       newErrors.password = 'Поле обязательно для заполнения';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Пароль должен содержать минимум 8 символов';
-    } else if (!/\d/.test(formData.password)) {
-      newErrors.password = 'Пароль должен содержать хотя бы одну цифру';
-    } else if (!/[a-z]/.test(formData.password)) {
-      newErrors.password = 'Пароль должен содержать хотя бы одну строчную букву';
-    } else if (!/[A-Z]/.test(formData.password)) {
-      newErrors.password = 'Пароль должен содержать хотя бы одну заглавную букву';
+    } else if (formData.password.length < 7) {
+      newErrors.password = 'Пароль должен содержать минимум 7 символов';
+    } else if (!validatePassword(formData.password)) {
+      newErrors.password = 'Пароль должен содержать хотя бы одну цифру, одну строчную и одну заглавную букву';
     }
 
     // Валидация подтверждения пароля
@@ -121,22 +121,10 @@ const Registration = () => {
       setSuccess('');
       setErrors({});
       
-      // Форматируем телефон согласно ТЗ (только цифры и +)
-      let formattedPhone = formData.phone.replace(/[^\d+]/g, '');
+      // Форматируем телефон: оставляем только цифры
+      let formattedPhone = formData.phone.replace(/\D/g, '');
       
-      // Убедимся, что телефон начинается с +7
-      if (formattedPhone.startsWith('8')) {
-        formattedPhone = '7' + formattedPhone.substring(1);
-      }
-      if (!formattedPhone.startsWith('+')) {
-        if (formattedPhone.startsWith('7')) {
-          formattedPhone = '+' + formattedPhone;
-        } else {
-          formattedPhone = '+7' + formattedPhone;
-        }
-      }
-      
-      // Подготавливаем данные для отправки
+      // Подготавливаем данные для отправки в формате JSON
       const userData = {
         name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
@@ -148,17 +136,34 @@ const Registration = () => {
 
       console.log('Sending registration data:', { ...userData, password: '***', password_confirmation: '***' });
       
-      // Регистрация
-      await register(userData);
-      console.log('Registration successful');
+      // Регистрация (внутри AuthContext автоматически выполняется вход)
+      const result = await register(userData);
+      console.log('Registration result:', result);
       
-      // Показываем сообщение об успехе
-      setSuccess('Регистрация прошла успешно! Вы автоматически вошли в систему.');
-      
-      // Через 2 секунды перенаправляем на главную
-      setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 2000);
+      if (result.success) {
+        if (result.message) {
+          // Если автоматический вход не удался, но регистрация успешна
+          setSuccess(result.message);
+          
+          // Сохраняем данные для будущего входа
+          localStorage.setItem('userEmail', userData.email);
+          localStorage.setItem('userName', userData.name);
+          localStorage.setItem('userPhone', userData.phone);
+          
+          // Через 2 секунды перенаправляем в личный кабинет
+          setTimeout(() => {
+            navigate('/profile', { replace: true });
+          }, 2000);
+        } else {
+          // Регистрация и автоматический вход успешны
+          setSuccess('Регистрация прошла успешно! Вы автоматически вошли в систему и перенаправлены в личный кабинет.');
+          
+          // Через 2 секунды перенаправляем в личный кабинет
+          setTimeout(() => {
+            navigate('/profile', { replace: true });
+          }, 2000);
+        }
+      }
       
     } catch (error) {
       console.error('=== REGISTRATION ERROR ===');
@@ -247,13 +252,13 @@ const Registration = () => {
                     onChange={handleChange}
                     isInvalid={!!errors.phone}
                     disabled={loading}
-                    placeholder="+7 (900) 123-45-67"
+                    placeholder="89001234567"
                   />
                   <Form.Control.Feedback type="invalid">
                     {errors.phone}
                   </Form.Control.Feedback>
                   <Form.Text className="text-muted">
-                    Пример: +7 (911) 123-45-67
+                    Пример: 89001234567 или +79001234567
                   </Form.Text>
                 </Form.Group>
 
@@ -266,7 +271,7 @@ const Registration = () => {
                     onChange={handleChange}
                     isInvalid={!!errors.email}
                     disabled={loading}
-                    placeholder="example@mail.ru"
+                    placeholder="user@user.ru"
                   />
                   <Form.Control.Feedback type="invalid">
                     {errors.email}
@@ -285,13 +290,13 @@ const Registration = () => {
                     onChange={handleChange}
                     isInvalid={!!errors.password}
                     disabled={loading}
-                    placeholder="Минимум 8 символов"
+                    placeholder="Минимум 7 символов"
                   />
                   <Form.Control.Feedback type="invalid">
                     {errors.password}
                   </Form.Control.Feedback>
                   <Form.Text className="text-muted">
-                    Минимум 8 символов: цифры, строчные и заглавные буквы
+                    Минимум 7 символов: хотя бы 1 цифра, 1 строчная и 1 заглавная буква
                   </Form.Text>
                 </Form.Group>
 
@@ -356,11 +361,20 @@ const Registration = () => {
           
           <div className="mt-4 text-center">
             <p className="text-muted small">
-              <strong>Тестовые данные для регистрации:</strong><br/>
-              Имя: Иван Иванов<br/>
-              Телефон: +7 (900) 123-45-67<br/>
-              Email: test{Date.now().toString().slice(-6)}@example.com<br/>
-              Пароль: Test1234 (минимум 8 символов, цифры и буквы)
+              <strong>Тестовые данные из ТЗ:</strong><br/>
+              Имя: Иван<br/>
+              Телефон: 89001234567<br/>
+              Email: user@user.ru<br/>
+              Пароль: paSSword1 (7 символов, 1 цифра, 1 строчная, 1 заглавная)<br/>
+              Подтверждение пароля: paSSword1<br/>
+              Согласие: обязательно
+            </p>
+            <p className="text-muted small mt-2">
+              <strong>После регистрации:</strong><br/>
+              1. Создается ваш личный кабинет<br/>
+              2. Вы автоматически входите в систему<br/>
+              3. Все данные сохраняются<br/>
+              4. Вы перенаправляетесь в профиль
             </p>
           </div>
         </Col>

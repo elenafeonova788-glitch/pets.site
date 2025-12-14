@@ -32,6 +32,19 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
         email: currentUser.email || '',
         phone: currentUser.phone || ''
       });
+    } else {
+      // Если пользователь не авторизован, но есть сохраненные данные в localStorage
+      const savedEmail = localStorage.getItem('userEmail');
+      const savedName = localStorage.getItem('userName');
+      const savedPhone = localStorage.getItem('userPhone');
+      
+      if (savedEmail || savedName || savedPhone) {
+        setEditForm({
+          name: savedName || '',
+          email: savedEmail || '',
+          phone: savedPhone || ''
+        });
+      }
     }
   }, [currentUser]);
 
@@ -49,6 +62,12 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
       await updateUser(editForm);
       setEditMode(false);
       setSuccess('Данные профиля успешно обновлены!');
+      
+      // Сохраняем в localStorage
+      localStorage.setItem('userEmail', editForm.email);
+      localStorage.setItem('userName', editForm.name);
+      localStorage.setItem('userPhone', editForm.phone);
+      
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       console.error('Update profile error:', error);
@@ -150,7 +169,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
               <i className="bi bi-check-circle-fill text-white"></i>
             </div>
           </div>
-          <h5 id="userName" className="mb-2">{currentUser?.name}</h5>
+          <h5 id="userName" className="mb-2">{currentUser?.name || 'Пользователь'}</h5>
           <p className="text-muted mb-3">Пользователь</p>
           <div className="d-flex flex-column gap-2">
             <Button 
@@ -184,7 +203,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
             <div id="profileInfo">
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Email:</Col>
-                <Col xs={8} id="userEmail">{currentUser?.email}</Col>
+                <Col xs={8} id="userEmail">{currentUser?.email || 'Не указан'}</Col>
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Телефон:</Col>
@@ -192,11 +211,11 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Дата регистрации:</Col>
-                <Col xs={8} id="userRegDate">{currentUser?.regDate}</Col>
+                <Col xs={8} id="userRegDate">{currentUser?.regDate || 'Не указана'}</Col>
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">На сайте:</Col>
-                <Col xs={8} id="userDaysOnSite">{currentUser?.daysOnSite}</Col>
+                <Col xs={8} id="userDaysOnSite">{currentUser?.daysOnSite || '1 день'}</Col>
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Завершенных объявлений:</Col>

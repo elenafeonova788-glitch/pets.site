@@ -64,19 +64,14 @@ export const apiRequest = async (endpoint, options = {}) => {
     method = 'GET',
     body = null,
     token = null,
-    isFormData = false,
-    isUrlEncoded = false,
     headers: customHeaders = {},
   } = options;
 
-  const headers = { ...customHeaders };
-
-  // Устанавливаем правильный Content-Type
-  if (isUrlEncoded) {
-    headers['Content-Type'] = 'application/x-www-form-urlencoded';
-  } else if (!isFormData && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
-  }
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    ...customHeaders,
+  };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -88,13 +83,7 @@ export const apiRequest = async (endpoint, options = {}) => {
   };
 
   if (body) {
-    if (isFormData) {
-      config.body = body;
-    } else if (isUrlEncoded) {
-      config.body = body;
-    } else {
-      config.body = JSON.stringify(body);
-    }
+    config.body = JSON.stringify(body);
   }
 
   try {
@@ -102,19 +91,22 @@ export const apiRequest = async (endpoint, options = {}) => {
     console.log(`URL: ${API_BASE_URL}${endpoint}`);
     console.log(`Method: ${method}`);
     console.log(`Headers:`, headers);
-    if (body && !isFormData) {
-      console.log(`Body:`, method === 'POST' ? (isUrlEncoded ? body.replace(/password=[^&]*/, 'password=***') : '***') : body);
-    }
-    
+    console.log(`Body:`, body ? { ...body, password: '***' } : 'No body');
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
     
     console.log(`=== API RESPONSE ===`);
     console.log(`Status: ${response.status} ${response.statusText}`);
-    
-    // Читаем ответ как текст
+
+    // Для статуса 204 (No Content) возвращаем пустой объект
+    if (response.status === 204) {
+      console.log('204 No Content - registration successful');
+      return {};
+    }
+
     const responseText = await response.text();
     console.log(`Response text:`, responseText);
-    
+
     let data;
     try {
       data = responseText ? JSON.parse(responseText) : {};
@@ -122,33 +114,30 @@ export const apiRequest = async (endpoint, options = {}) => {
       console.error('Failed to parse JSON:', parseError);
       data = { message: responseText };
     }
-    
+
     if (!response.ok) {
       console.error(`=== API ERROR ===`);
       
       let errorMessage = 'Ошибка сервера';
       let validationErrors = {};
       
-      // Пытаемся извлечь ошибки валидации
-      if (data.errors) {
-        console.log('Found errors in data.errors:', data.errors);
+      if (data.error) {
+        console.log('Error in data.error:', data.error);
+        if (data.error.message) {
+          errorMessage = data.error.message;
+        }
+        if (data.error.errors) {
+          validationErrors = data.error.errors;
+        }
+      } else if (data.errors) {
+        console.log('Errors in data.errors:', data.errors);
         validationErrors = data.errors;
       } else if (data.message) {
         errorMessage = data.message;
-      } else if (data.error) {
-        if (typeof data.error === 'string') {
-          errorMessage = data.error;
-        } else if (data.error.message) {
-          errorMessage = data.error.message;
-        } else if (data.error.errors) {
-          validationErrors = data.error.errors;
-        }
       }
       
-      // Форматируем ошибки валидации в читаемый вид
+      // Форматируем ошибки валидации
       if (Object.keys(validationErrors).length > 0) {
-        console.log('Formatting validation errors:', validationErrors);
-        
         const formattedErrors = [];
         for (const [field, errors] of Object.entries(validationErrors)) {
           if (Array.isArray(errors)) {
@@ -188,6 +177,7 @@ export const apiRequest = async (endpoint, options = {}) => {
     throw error;
   }
 };
+
 
 // Преобразование данных API в формат приложения
 export const transformPetData = (apiResponse, source = 'pets') => {
@@ -500,7 +490,6 @@ export const petsAPI = {
       method: 'POST',
       body: formData,
       token,
-      isFormData: true,
     }),
   
   updatePet: (id, formData, token) =>
@@ -508,7 +497,6 @@ export const petsAPI = {
       method: 'PATCH',
       body: formData,
       token,
-      isFormData: true,
     }),
   
   deletePet: (id, token) =>
@@ -518,44 +506,43 @@ export const petsAPI = {
     }),
 };
 
-// API для пользователей
+// API для пользователей - ОБНОВЛЕНО ПО ТЗ
 export const usersAPI = {
-  // Регистрация
+  // Регистрация - JSON формат как в ТЗ
   register: (userData) => {
     console.log('Register data to send:', userData);
     
-    // Формируем данные в формате x-www-form-urlencoded
-    const formData = new URLSearchParams();
-    formData.append('name', userData.name);
-    formData.append('phone', userData.phone);
-    formData.append('email', userData.email);
-    formData.append('password', userData.password);
-    formData.append('password_confirmation', userData.password_confirmation);
-    formData.append('confirm', userData.confirm || 1);
+    const body = {
+      name: userData.name,
+      phone: userData.phone,
+      email: userData.email,
+      password: userData.password,
+      password_confirmation: userData.password_confirmation,
+      confirm: userData.confirm || 1,
+    };
     
-    console.log('FormData for register:', formData.toString().replace(/password=[^&]*/, 'password=***'));
+    console.log('JSON body for register:', body);
     
     return apiRequest('/register', {
       method: 'POST',
-      body: formData.toString(),
-      isUrlEncoded: true,
+      body,
     });
   },
   
-  // Вход
+  // Вход - JSON формат как в ТЗ
   login: (credentials) => {
     console.log('Login data to send:', { ...credentials, password: '***' });
     
-    const formData = new URLSearchParams();
-    formData.append('email', credentials.email);
-    formData.append('password', credentials.password);
+    const body = {
+      email: credentials.email,
+      password: credentials.password,
+    };
     
-    console.log('FormData for login:', formData.toString().replace(/password=[^&]*/, 'password=***'));
+    console.log('JSON body for login:', body);
     
     return apiRequest('/login', {
       method: 'POST',
-      body: formData.toString(),
-      isUrlEncoded: true,
+      body,
     });
   },
   
