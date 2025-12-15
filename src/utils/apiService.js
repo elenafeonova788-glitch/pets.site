@@ -507,11 +507,12 @@ export const petsAPI = {
 };
 
 // API для пользователей - ОБНОВЛЕНО ПО ТЗ
+// API для пользователей - по ТЗ
 export const usersAPI = {
   // Регистрация - JSON формат как в ТЗ
   register: (userData) => {
     console.log('Register data to send:', userData);
-    
+
     const body = {
       name: userData.name,
       phone: userData.phone,
@@ -520,39 +521,39 @@ export const usersAPI = {
       password_confirmation: userData.password_confirmation,
       confirm: userData.confirm || 1,
     };
-    
+
     console.log('JSON body for register:', body);
-    
+
     return apiRequest('/register', {
       method: 'POST',
       body,
     });
   },
-  
+
   // Вход - JSON формат как в ТЗ
   login: (credentials) => {
     console.log('Login data to send:', { ...credentials, password: '***' });
-    
+
     const body = {
       email: credentials.email,
       password: credentials.password,
     };
-    
+
     console.log('JSON body for login:', body);
-    
+
     return apiRequest('/login', {
       method: 'POST',
       body,
     });
   },
-  
+
   // Получить данные пользователя
   getUser: (id, token) =>
     apiRequest(`/users/${id}`, {
       method: 'GET',
       token,
     }),
-  
+
   // Обновить телефон
   updatePhone: (id, phone, token) =>
     apiRequest(`/users/${id}/phone`, {
@@ -560,7 +561,7 @@ export const usersAPI = {
       body: { phone },
       token,
     }),
-  
+
   // Обновить email
   updateEmail: (id, email, token) =>
     apiRequest(`/users/${id}/email`, {
@@ -568,7 +569,7 @@ export const usersAPI = {
       body: { email },
       token,
     }),
-  
+
   // Получить объявления пользователя
   getUserOrders: (id, token) =>
     apiRequest(`/users/orders/${id}`, {
@@ -576,7 +577,6 @@ export const usersAPI = {
       token,
     }),
 };
-
 // API для подписки
 export const subscriptionAPI = {
   subscribe: (email) =>

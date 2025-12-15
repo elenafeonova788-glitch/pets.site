@@ -4,18 +4,18 @@ import { Form, Button, Card, Container, Row, Col, Alert, Spinner, Collapse } fro
 import { useAuth } from '../context/AuthContext';
 import { districts } from '../utils/constants';
 import { validateEmail, validatePhone, validateName, validatePassword } from '../utils/helpers';
-import { preparePetFormData, petsAPI } from '../utils/apiService';
+import { petsAPI, usersAPI } from '../utils/apiService';
 
 const AddPet = () => {
   const { isAuthenticated, currentUser, addUserAd, login, register } = useAuth();
   const navigate = useNavigate();
-  
+
   const [formData, setFormData] = useState({
     // Контактная информация
     userName: '',
     userPhone: '',
     userEmail: '',
-    
+
     // Информация о животном
     type: '',
     status: 'found', // По умолчанию "Найден"
@@ -26,21 +26,19 @@ const AddPet = () => {
     photos: [],
     mark: '',
     confirm: false,
-    
-    // Авторизация/регистрация
-    wantsToAuth: false,
-    authEmail: '',
-    authPassword: '',
-    authPasswordConfirmation: '',
-    registerNewAccount: false,
+
+    // Регистрация (только для неавторизованных)
+    wantsToRegister: false,
+    registerPassword: '',
+    registerPasswordConfirmation: '',
   });
 
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState('');
   const [loading, setLoading] = useState(false);
   const [photoPreviews, setPhotoPreviews] = useState([]);
-  const [showAuthFields, setShowAuthFields] = useState(false);
-  
+  const [showRegisterFields, setShowRegisterFields] = useState(false);
+
   const passwordRef = useRef(null);
 
   // Загружаем сохраненные данные из localStorage
@@ -49,7 +47,7 @@ const AddPet = () => {
     const savedEmail = localStorage.getItem('userEmail');
     const savedName = localStorage.getItem('userName');
     const savedPhone = localStorage.getItem('userPhone');
-    
+
     // Если есть сохраненные данные, заполняем форму
     if (savedEmail || savedName || savedPhone) {
       setFormData(prev => ({
@@ -57,10 +55,9 @@ const AddPet = () => {
         userEmail: savedEmail || prev.userEmail,
         userName: savedName || prev.userName,
         userPhone: savedPhone || prev.userPhone,
-        authEmail: savedEmail || prev.authEmail // Также заполняем поле для авторизации
       }));
     }
-    
+
     // Если пользователь авторизован, используем данные из currentUser
     if (isAuthenticated && currentUser) {
       setFormData(prev => ({
@@ -68,23 +65,22 @@ const AddPet = () => {
         userName: currentUser.name || '',
         userPhone: currentUser.phone || '',
         userEmail: currentUser.email || '',
-        authEmail: currentUser.email || ''
       }));
     }
   }, [isAuthenticated, currentUser]);
 
   const handleChange = (e) => {
     const { name, value, type, checked, files } = e.target;
-    
+
     if (type === 'file') {
       if (files.length > 3) {
         alert('Можно загрузить не более 3 фотографий');
         e.target.value = '';
         return;
       }
-      
+
       const newPhotos = Array.from(files);
-      
+
       // ПРОВЕРКА ФОРМАТА - ТОЛЬКО PNG
       const invalidFiles = newPhotos.filter(file => file.type !== 'image/png');
       if (invalidFiles.length > 0) {
@@ -92,9 +88,9 @@ const AddPet = () => {
         e.target.value = '';
         return;
       }
-      
+
       const newPreviews = [];
-      
+
       newPhotos.forEach(file => {
         if (file.type.match('image.*')) {
           const reader = new FileReader();
@@ -107,7 +103,7 @@ const AddPet = () => {
           reader.readAsDataURL(file);
         }
       });
-      
+
       setFormData(prev => ({
         ...prev,
         photos: [...prev.photos, ...newPhotos].slice(0, 3)
@@ -117,24 +113,19 @@ const AddPet = () => {
         ...prev,
         [name]: type === 'checkbox' ? checked : value
       }));
-      
-      // При включении авторизации показываем поля
-      if (name === 'wantsToAuth' && checked) {
-        setShowAuthFields(true);
-        // Автозаполняем email из формы
-        setFormData(prev => ({
-          ...prev,
-          authEmail: prev.userEmail
-        }));
-        
+
+      // При включении регистрации показываем поля пароля
+      if (name === 'wantsToRegister' && checked) {
+        setShowRegisterFields(true);
+
         // Фокусируемся на поле пароля после анимации
         setTimeout(() => {
           if (passwordRef.current) {
             passwordRef.current.focus();
           }
         }, 300);
-      } else if (name === 'wantsToAuth' && !checked) {
-        setShowAuthFields(false);
+      } else if (name === 'wantsToRegister' && !checked) {
+        setShowRegisterFields(false);
       }
     }
     setApiError('');
@@ -146,7 +137,7 @@ const AddPet = () => {
       newPhotos.splice(index, 1);
       return { ...prev, photos: newPhotos };
     });
-    
+
     setPhotoPreviews(prev => {
       const newPreviews = [...prev];
       newPreviews.splice(index, 1);
@@ -156,7 +147,7 @@ const AddPet = () => {
 
   const validateForm = () => {
     const newErrors = {};
-
+    
     // Валидация контактной информации
     if (!formData.userName.trim()) {
       newErrors.userName = 'Поле обязательно для заполнения';
@@ -208,26 +199,18 @@ const AddPet = () => {
       newErrors.confirm = 'Необходимо согласие на обработку персональных данных';
     }
 
-    // Валидация авторизации/регистрации
-    if (formData.wantsToAuth) {
-      if (!formData.authEmail.trim()) {
-        newErrors.authEmail = 'Поле обязательно для заполнения';
-      } else if (!validateEmail(formData.authEmail)) {
-        newErrors.authEmail = 'Введите корректный email адрес';
+    // Валидация регистрации (только если не авторизован и выбрана регистрация)
+    if (!isAuthenticated && formData.wantsToRegister) {
+      if (!formData.registerPassword) {
+        newErrors.registerPassword = 'Поле обязательно для заполнения';
+      } else if (!validatePassword(formData.registerPassword)) {
+        newErrors.registerPassword = 'Пароль должен содержать минимум 7 символов, включая 1 цифру, 1 строчную и 1 заглавную букву';
       }
-      
-      if (!formData.authPassword) {
-        newErrors.authPassword = 'Поле обязательно для заполнения';
-      } else if (!validatePassword(formData.authPassword)) {
-        newErrors.authPassword = 'Пароль должен содержать минимум 7 символов, включая 1 цифру, 1 строчную и 1 заглавную букву';
-      }
-      
-      if (formData.registerNewAccount) {
-        if (!formData.authPasswordConfirmation) {
-          newErrors.authPasswordConfirmation = 'Поле обязательно для заполнения';
-        } else if (formData.authPassword !== formData.authPasswordConfirmation) {
-          newErrors.authPasswordConfirmation = 'Пароли не совпадают';
-        }
+
+      if (!formData.registerPasswordConfirmation) {
+        newErrors.registerPasswordConfirmation = 'Поле обязательно для заполнения';
+      } else if (formData.registerPassword !== formData.registerPasswordConfirmation) {
+        newErrors.registerPasswordConfirmation = 'Пароли не совпадают';
       }
     }
 
@@ -237,7 +220,7 @@ const AddPet = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = validateForm();
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -247,78 +230,85 @@ const AddPet = () => {
       setLoading(true);
       setApiError('');
 
-      // Если пользователь хочет авторизоваться/зарегистрироваться
-      if (formData.wantsToAuth && !isAuthenticated) {
+      let userId = null;
+      let userToken = null;
+
+      // Шаг 1: Регистрация пользователя (если выбрана и не авторизован)
+      if (!isAuthenticated && formData.wantsToRegister) {
         try {
-          if (formData.registerNewAccount) {
-            // Регистрация
-            const registrationData = {
-              name: formData.userName,
-              email: formData.authEmail,
-              phone: formData.userPhone.replace(/\D/g, ''),
-              password: formData.authPassword,
-              password_confirmation: formData.authPasswordConfirmation,
-              confirm: true
-            };
-            
-            const result = await register(registrationData);
-            console.log('Registration result:', result);
-          } else {
-            // Вход
-            await login({
-              email: formData.authEmail,
-              password: formData.authPassword,
-              name: formData.userName,
-              phone: formData.userPhone
-            });
+          // Регистрируем пользователя с ВСЕМИ данными
+          const registrationData = {
+            name: formData.userName,
+            phone: formData.userPhone.replace(/\D/g, ''),
+            email: formData.userEmail,
+            password: formData.registerPassword,
+            password_confirmation: formData.registerPasswordConfirmation,
+            confirm: formData.confirm ? 1 : 0
+          };
+
+          console.log('Регистрация пользователя:', registrationData);
+          
+          // Регистрируем пользователя
+          const registerResponse = await usersAPI.register(registrationData);
+          console.log('Регистрация успешна:', registerResponse);
+
+          // Автоматически входим после регистрации
+          const loginResponse = await usersAPI.login({
+            email: formData.userEmail,
+            password: formData.registerPassword
+          });
+
+          // Получаем токен из ответа
+          if (loginResponse.data && loginResponse.data.token) {
+            userToken = loginResponse.data.token;
+            localStorage.setItem('token', userToken);
+          } else if (loginResponse.token) {
+            userToken = loginResponse.token;
+            localStorage.setItem('token', userToken);
           }
-          
-          // Обновляем email в форме после авторизации
-          setFormData(prev => ({
-            ...prev,
-            userEmail: formData.authEmail
-          }));
-          
-          // Сохраняем данные в localStorage
-          localStorage.setItem('userEmail', formData.authEmail);
+
+          // Сохраняем все данные пользователя в localStorage
+          localStorage.setItem('userEmail', formData.userEmail);
           localStorage.setItem('userName', formData.userName);
           localStorage.setItem('userPhone', formData.userPhone);
-          
+
+          // Получаем ID пользователя (предполагаем, что он есть в ответе)
+          if (registerResponse.data && registerResponse.data.user) {
+            userId = registerResponse.data.user.id;
+          }
+
         } catch (authError) {
-          console.error('Auth error:', authError);
-          setApiError('Ошибка авторизации/регистрации: ' + (authError.message || 'Неверные данные'));
+          console.error('Ошибка регистрации/входа:', authError);
+          setApiError('Ошибка регистрации: ' + (authError.message || 'Не удалось зарегистрироваться'));
           setLoading(false);
           return;
         }
       }
 
-      // Подготовка данных для API - ПРАВИЛЬНЫЕ ИМЕНА ПОЛЕЙ!
+      // Шаг 2: Подготовка данных для объявления
       const petData = {
         name: formData.userName,
-        phone: formData.userPhone,
+        phone: formData.userPhone.replace(/\D/g, ''),
         email: formData.userEmail,
         kind: formData.type,
-        status: formData.status, // Добавляем статус
         description: formData.description,
-        district: formData.district,
+        district: districts[formData.district] || formData.district,
         date: formData.date,
         mark: formData.mark || '',
         confirm: formData.confirm ? 1 : 0,
       };
 
-      console.log('Pet data to submit:', petData);
-      console.log('Status:', formData.status);
-      console.log('Photos count:', formData.photos.length);
+      console.log('Данные для объявления:', petData);
 
-      // Создаем FormData
+      // Создаем FormData для отправки файлов
       const formDataToSend = new FormData();
-      
+
       // Добавляем текстовые поля
       Object.keys(petData).forEach(key => {
         formDataToSend.append(key, petData[key]);
       });
 
-      // Добавляем фото с правильными именами полей
+      // Добавляем фото с правильными именами полей по ТЗ
       if (formData.photos && formData.photos.length > 0) {
         formData.photos.forEach((photo, index) => {
           // Используем имена photo1, photo2, photo3 как ожидает API
@@ -326,73 +316,65 @@ const AddPet = () => {
         });
       }
 
-      // Отладка: покажем что отправляем
-      console.log('FormData entries:');
-      for (let pair of formDataToSend.entries()) {
-        console.log(pair[0] + ': ', pair[1]);
-      }
-
       // Отправка объявления
-      let response;
-      if (isAuthenticated) {
-        // Для авторизованных пользователей
-        response = await addUserAd(formDataToSend);
-      } else {
-        // Для незарегистрированных пользователей
-        try {
-          response = await petsAPI.addPet(formDataToSend, null);
-          console.log('API response for unauthenticated user:', response);
-        } catch (apiError) {
-          console.error('API error:', apiError);
-          setApiError('Ошибка API: ' + (apiError.message || 'Не удалось добавить объявление'));
-          setLoading(false);
-          return;
+      try {
+        // Используем токен, если пользователь зарегистрировался или уже авторизован
+        const token = userToken || (isAuthenticated ? localStorage.getItem('token') : null);
+        
+        const response = await petsAPI.addPet(formDataToSend, token);
+        console.log('Объявление добавлено:', response);
+
+        if (response.data && response.data.id) {
+          alert('Объявление успешно добавлено!');
+          
+          // Сброс формы
+          setFormData({
+            userName: isAuthenticated && currentUser ? (currentUser.name || '') : '',
+            userPhone: isAuthenticated && currentUser ? (currentUser.phone || '') : '',
+            userEmail: isAuthenticated && currentUser ? (currentUser.email || '') : '',
+            type: '',
+            status: 'found',
+            name: '',
+            description: '',
+            district: '',
+            date: new Date().toISOString().split('T')[0],
+            photos: [],
+            mark: '',
+            confirm: false,
+            wantsToRegister: false,
+            registerPassword: '',
+            registerPasswordConfirmation: '',
+          });
+          
+          setPhotoPreviews([]);
+          setErrors({});
+          setShowRegisterFields(false);
+
+          // Сохраняем данные пользователя в localStorage для будущего входа
+          if (!isAuthenticated && !formData.wantsToRegister) {
+            localStorage.setItem('userEmail', formData.userEmail);
+            localStorage.setItem('userName', formData.userName);
+            localStorage.setItem('userPhone', formData.userPhone);
+          }
+
+          // Перенаправление
+          if (isAuthenticated || formData.wantsToRegister) {
+            navigate('/profile');
+          } else {
+            navigate('/');
+          }
+        } else {
+          setApiError('Ошибка при добавлении объявления: не получен ID объявления');
         }
+      } catch (apiError) {
+        console.error('Ошибка API при добавлении объявления:', apiError);
+        setApiError('Ошибка при добавлении объявления: ' + (apiError.message || 'Не удалось добавить объявление'));
       }
 
-      // Сохраняем данные пользователя в localStorage для будущего входа
-      if (!isAuthenticated) {
-        localStorage.setItem('userEmail', formData.userEmail);
-        localStorage.setItem('userName', formData.userName);
-        localStorage.setItem('userPhone', formData.userPhone);
-      }
-
-      // Сброс формы
-      setFormData({
-        userName: isAuthenticated && currentUser ? (currentUser.name || '') : '',
-        userPhone: isAuthenticated && currentUser ? (currentUser.phone || '') : '',
-        userEmail: isAuthenticated && currentUser ? (currentUser.email || '') : '',
-        type: '',
-        status: 'found', // Сбрасываем на значение по умолчанию
-        name: '',
-        description: '',
-        district: '',
-        date: new Date().toISOString().split('T')[0],
-        photos: [],
-        mark: '',
-        confirm: false,
-        wantsToAuth: false,
-        authEmail: '',
-        authPassword: '',
-        authPasswordConfirmation: '',
-        registerNewAccount: false,
-      });
-      setPhotoPreviews([]);
-      setErrors({});
-      setShowAuthFields(false);
-      
-      alert('Объявление успешно добавлено!');
-      
-      // Перенаправление
-      if (isAuthenticated) {
-        navigate('/profile');
-      } else {
-        navigate('/');
-      }
-      
     } catch (error) {
-      console.error('Add pet error:', error);
+      console.error('Общая ошибка:', error);
       setApiError(error.message || 'Ошибка при добавлении объявления. Пожалуйста, попробуйте снова.');
+    } finally {
       setLoading(false);
     }
   };
@@ -404,70 +386,51 @@ const AddPet = () => {
           <Card className="shadow">
             <Card.Body className="p-5">
               <h2 className="card-title text-center mb-4">Добавить объявление о питомце</h2>
-              
-              {/* Предложение войти или зарегистрироваться для незарегистрированных пользователей */}
+
+              {/* Предложение зарегистрироваться для незарегистрированных пользователей */}
               {!isAuthenticated && (
                 <Alert variant="info" className="mb-4">
                   <h5 className="alert-heading">
-                    {formData.wantsToAuth 
-                      ? (formData.registerNewAccount ? 'Регистрация' : 'Вход в систему') 
+                    {formData.wantsToRegister
+                      ? 'Регистрация'
                       : 'Вы не вошли в систему'}
                   </h5>
                   <p className="mb-2">
-                    {formData.wantsToAuth 
-                      ? (formData.registerNewAccount 
-                          ? 'Зарегистрируйтесь, чтобы сохранить ваши данные для будущих объявлений.' 
-                          : 'Войдите, чтобы сохранить ваши данные для будущих объявлений.')
-                      : 'Вы можете добавить объявление без регистрации, но мы рекомендуем авторизоваться:'}
+                    {formData.wantsToRegister
+                      ? 'Зарегистрируйтесь, чтобы сохранить ваши данные для будущих объявлений.'
+                      : 'Вы можете добавить объявление без регистрации, но мы рекомендуем зарегистрироваться:'}
                   </p>
-                  
-                  {!formData.wantsToAuth ? (
+
+                  {!formData.wantsToRegister ? (
                     <div className="d-flex gap-2 mt-3">
-                      <Button 
-                        variant="dark" 
+                      <Button
+                        variant="dark"
                         size="sm"
                         onClick={() => {
                           setFormData(prev => ({
                             ...prev,
-                            wantsToAuth: true,
-                            registerNewAccount: false
+                            wantsToRegister: true
                           }));
-                          setShowAuthFields(true);
-                        }}
-                      >
-                        Войти
-                      </Button>
-                      <Button 
-                        variant="outline-dark" 
-                        size="sm"
-                        onClick={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            wantsToAuth: true,
-                            registerNewAccount: true
-                          }));
-                          setShowAuthFields(true);
+                          setShowRegisterFields(true);
                         }}
                       >
                         Зарегистрироваться
                       </Button>
                     </div>
                   ) : null}
-                  
+
                   <p className="mt-3 mb-0">
                     <small>
-                      {formData.wantsToAuth 
-                        ? (formData.registerNewAccount 
-                            ? 'После регистрации вы сможете управлять своими объявлениями в личном кабинете.'
-                            : 'После входа вы сможете управлять своими объявлениями в личном кабинете.')
-                        : 'Если вы авторизуетесь, ваши контактные данные будут сохранены для будущих объявлений.'}
+                      {formData.wantsToRegister
+                        ? 'После регистрации вы сможете управлять своими объявлениями в личном кабинете.'
+                        : 'Если вы зарегистрируетесь, ваши контактные данные будут сохранены для будущих объявлений.'}
                     </small>
                   </p>
                 </Alert>
               )}
-              
+
               {apiError && <Alert variant="danger" className="mb-3">{apiError}</Alert>}
-              
+
               <Form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <h5 className="mb-3">Контактная информация</h5>
@@ -480,7 +443,7 @@ const AddPet = () => {
                         value={formData.userName}
                         onChange={handleChange}
                         isInvalid={!!errors.userName}
-                        disabled={loading}
+                        disabled={loading || (isAuthenticated && currentUser)}
                         placeholder="Ваше имя"
                       />
                       <Form.Control.Feedback type="invalid">
@@ -495,7 +458,7 @@ const AddPet = () => {
                         value={formData.userPhone}
                         onChange={handleChange}
                         isInvalid={!!errors.userPhone}
-                        disabled={loading}
+                        disabled={loading || (isAuthenticated && currentUser)}
                         placeholder="+7 (XXX) XXX-XX-XX"
                       />
                       <Form.Control.Feedback type="invalid">
@@ -503,7 +466,7 @@ const AddPet = () => {
                       </Form.Control.Feedback>
                     </Col>
                   </Row>
-                  
+
                   <Col md={6} className="mb-3">
                     <Form.Label className="required-field">Email</Form.Label>
                     <Form.Control
@@ -512,7 +475,7 @@ const AddPet = () => {
                       value={formData.userEmail}
                       onChange={handleChange}
                       isInvalid={!!errors.userEmail}
-                      disabled={loading}
+                      disabled={loading || (isAuthenticated && currentUser)}
                       placeholder="example@mail.ru"
                     />
                     <Form.Control.Feedback type="invalid">
@@ -520,108 +483,68 @@ const AddPet = () => {
                     </Form.Control.Feedback>
                   </Col>
                 </div>
-                
-                {/* Поля авторизации/регистрации */}
+
+                {/* Поля регистрации (только для неавторизованных) */}
                 {!isAuthenticated && (
                   <div className="mb-4">
                     <Form.Check
                       type="checkbox"
-                      id="wantsToAuth"
-                      name="wantsToAuth"
-                      label="Я хочу авторизоваться или зарегистрироваться"
-                      checked={formData.wantsToAuth}
+                      id="wantsToRegister"
+                      name="wantsToRegister"
+                      label="Зарегистрироваться при добавлении объявления"
+                      checked={formData.wantsToRegister}
                       onChange={handleChange}
                       disabled={loading}
                       className="mb-3"
                     />
-                    
-                    <Collapse in={showAuthFields}>
+
+                    <Collapse in={showRegisterFields}>
                       <div>
-                        <Row className="mb-3">
-                          <Col md={6}>
-                            <Form.Check
-                              type="radio"
-                              id="loginExisting"
-                              name="registerNewAccount"
-                              label="Войти в существующий аккаунт"
-                              checked={!formData.registerNewAccount}
-                              onChange={() => setFormData(prev => ({ ...prev, registerNewAccount: false }))}
-                              disabled={loading}
-                            />
-                          </Col>
-                          <Col md={6}>
-                            <Form.Check
-                              type="radio"
-                              id="registerNew"
-                              name="registerNewAccount"
-                              label="Зарегистрировать новый аккаунт"
-                              checked={formData.registerNewAccount}
-                              onChange={() => setFormData(prev => ({ ...prev, registerNewAccount: true }))}
-                              disabled={loading}
-                            />
-                          </Col>
-                        </Row>
-                        
                         <Row>
-                          <Col md={6} className="mb-3">
-                            <Form.Label className="required-field">Email для {formData.registerNewAccount ? 'регистрации' : 'входа'}</Form.Label>
-                            <Form.Control
-                              type="email"
-                              name="authEmail"
-                              value={formData.authEmail}
-                              onChange={handleChange}
-                              isInvalid={!!errors.authEmail}
-                              disabled={loading}
-                              placeholder="example@mail.ru"
-                            />
-                            <Form.Control.Feedback type="invalid">
-                              {errors.authEmail}
-                            </Form.Control.Feedback>
-                          </Col>
-                          
                           <Col md={6} className="mb-3">
                             <Form.Label className="required-field">Пароль</Form.Label>
                             <Form.Control
                               type="password"
-                              name="authPassword"
+                              name="registerPassword"
                               ref={passwordRef}
-                              value={formData.authPassword}
+                              value={formData.registerPassword}
                               onChange={handleChange}
-                              isInvalid={!!errors.authPassword}
+                              isInvalid={!!errors.registerPassword}
                               disabled={loading}
                               placeholder="Минимум 7 символов"
                             />
                             <Form.Control.Feedback type="invalid">
-                              {errors.authPassword}
+                              {errors.registerPassword}
                             </Form.Control.Feedback>
+                            <Form.Text className="text-muted">
+                              Минимум 7 символов: 1 цифра, 1 строчная, 1 заглавная буква
+                            </Form.Text>
                           </Col>
-                        </Row>
-                        
-                        {formData.registerNewAccount && (
+
                           <Col md={6} className="mb-3">
                             <Form.Label className="required-field">Подтверждение пароля</Form.Label>
                             <Form.Control
                               type="password"
-                              name="authPasswordConfirmation"
-                              value={formData.authPasswordConfirmation}
+                              name="registerPasswordConfirmation"
+                              value={formData.registerPasswordConfirmation}
                               onChange={handleChange}
-                              isInvalid={!!errors.authPasswordConfirmation}
+                              isInvalid={!!errors.registerPasswordConfirmation}
                               disabled={loading}
                               placeholder="Повторите пароль"
                             />
                             <Form.Control.Feedback type="invalid">
-                              {errors.authPasswordConfirmation}
+                              {errors.registerPasswordConfirmation}
                             </Form.Control.Feedback>
                           </Col>
-                        )}
+                        </Row>
                       </div>
                     </Collapse>
                   </div>
                 )}
-                
+
                 <div className="mb-4">
                   <h5 className="mb-3">Информация о животном</h5>
-                  
+
                   <Row>
                     <Col md={6} className="mb-3">
                       <Form.Label className="required-field">Статус</Form.Label>
@@ -640,7 +563,7 @@ const AddPet = () => {
                         {errors.status}
                       </Form.Control.Feedback>
                     </Col>
-                    
+
                     <Col md={6} className="mb-3">
                       <Form.Label className="required-field">Тип животного</Form.Label>
                       <Form.Select
@@ -664,7 +587,7 @@ const AddPet = () => {
                       </Form.Control.Feedback>
                     </Col>
                   </Row>
-                  
+
                   <Col md={6} className="mb-3">
                     <Form.Label>Кличка животного</Form.Label>
                     <Form.Control
@@ -676,7 +599,7 @@ const AddPet = () => {
                       placeholder="Введите кличку"
                     />
                   </Col>
-                  
+
                   <Col md={6} className="mb-3">
                     <Form.Label>Клеймо/Метка</Form.Label>
                     <Form.Control
@@ -688,7 +611,7 @@ const AddPet = () => {
                       placeholder="Если есть"
                     />
                   </Col>
-                  
+
                   <Col md={12} className="mb-3">
                     <Form.Label className="required-field">Описание</Form.Label>
                     <Form.Control
@@ -705,7 +628,7 @@ const AddPet = () => {
                       {errors.description}
                     </Form.Control.Feedback>
                   </Col>
-                  
+
                   <Row>
                     <Col md={6} className="mb-3">
                       <Form.Label className="required-field">Район</Form.Label>
@@ -740,7 +663,7 @@ const AddPet = () => {
                       </Form.Control.Feedback>
                     </Col>
                   </Row>
-                  
+
                   <div className="mb-3">
                     <Form.Label className="required-field">
                       Фотографии животного (минимум 1, максимум 3, ТОЛЬКО PNG)
@@ -760,21 +683,21 @@ const AddPet = () => {
                     <div className="form-text">
                       Выберите от 1 до 3 фотографий животного в формате PNG. Первая фотография обязательна.
                     </div>
-                    
+
                     {photoPreviews.length > 0 && (
                       <div className="mt-3">
                         <h6>Выбранные фотографии:</h6>
                         <div className="d-flex flex-wrap gap-2">
                           {photoPreviews.map((preview, index) => (
                             <div key={index} className="position-relative" style={{ width: '100px' }}>
-                              <img 
-                                src={preview} 
-                                alt={`Preview ${index + 1}`} 
-                                className="photo-preview" 
-                                style={{ 
-                                  width: '100px', 
-                                  height: '100px', 
-                                  objectFit: 'cover', 
+                              <img
+                                src={preview}
+                                alt={`Preview ${index + 1}`}
+                                className="photo-preview"
+                                style={{
+                                  width: '100px',
+                                  height: '100px',
+                                  objectFit: 'cover',
                                   borderRadius: '5px',
                                   border: index === 0 ? '2px solid #007bff' : '1px solid #ddd'
                                 }}
@@ -807,7 +730,7 @@ const AddPet = () => {
                     )}
                   </div>
                 </div>
-                
+
                 <Form.Check
                   type="checkbox"
                   id="petConfirm"
@@ -822,11 +745,11 @@ const AddPet = () => {
                 <Form.Control.Feedback type="invalid">
                   {errors.confirm}
                 </Form.Control.Feedback>
-                
-                <Button 
-                  type="submit" 
-                  variant="dark" 
-                  className="w-100" 
+
+                <Button
+                  type="submit"
+                  variant="dark"
+                  className="w-100"
                   disabled={loading}
                 >
                   {loading ? (

@@ -14,29 +14,36 @@ export const AuthProvider = ({ children }) => {
   // Загрузка данных пользователя при наличии токена
   useEffect(() => {
     const initAuth = async () => {
-      if (token && token !== 'temp-token') {
+      const savedToken = localStorage.getItem('token');
+      const savedEmail = localStorage.getItem('userEmail');
+      const savedName = localStorage.getItem('userName');
+      const savedPhone = localStorage.getItem('userPhone');
+
+      if (savedToken && savedEmail) {
         try {
-          // Пытаемся получить данные пользователя
-          const userResponse = await usersAPI.getUser(1, token);
+          // Пытаемся получить данные пользователя через API
+          const userResponse = await usersAPI.getUser(1, savedToken);
           console.log('User response:', userResponse);
-          
+
           if (userResponse.data && userResponse.data.user) {
             const userData = userResponse.data.user;
             const user = Array.isArray(userData) ? userData[0] : userData;
-            
+
             setCurrentUser({
               id: user.id || 1,
-              name: user.name || 'Пользователь',
-              email: user.email || '',
-              phone: user.phone || '',
+              name: user.name || savedName || 'Пользователь',
+              email: user.email || savedEmail || '',
+              phone: user.phone || savedPhone || '',
               regDate: user.registrationDate || new Date().toISOString().split('T')[0],
               daysOnSite: calculateDaysOnSite(user.registrationDate),
               completedAds: user.petsCount || 0,
               incompleteAds: user.ordersCount || 0,
             });
-
+            
+            setToken(savedToken);
+            
             // Загружаем объявления пользователя
-            const ads = await loadUserAds(1);
+            const ads = await loadUserAds(user.id || 1);
             setUserAds(ads);
           }
         } catch (error) {
@@ -45,6 +52,7 @@ export const AuthProvider = ({ children }) => {
           if (error.message.includes('401') || error.message.includes('Unauthorized')) {
             localStorage.removeItem('token');
             setToken(null);
+            setCurrentUser(null);
           }
         }
       }
@@ -52,13 +60,13 @@ export const AuthProvider = ({ children }) => {
     };
 
     initAuth();
-  }, [token]);
+  }, []);
 
   // Загрузка объявлений пользователя
   const loadUserAds = async (userId) => {
     try {
       const response = await usersAPI.getUserOrders(userId, token);
-      
+
       if (response.data && response.data.orders) {
         return response.data.orders.map(ad => ({
           id: ad.id,
@@ -93,19 +101,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Вход в систему - ОБНОВЛЕНО ПО ТЗ
+  // Вход в систему
   const login = async (credentials) => {
     try {
       setLoading(true);
       console.log('=== LOGIN ATTEMPT ===');
       console.log('Credentials:', { ...credentials, password: '***' });
-      
+
       const response = await usersAPI.login(credentials);
       console.log('Login API response:', response);
-      
+
       // Проверяем наличие токена в разных местах ответа
       let authToken = null;
-      
+
       if (response.data && response.data.token) {
         authToken = response.data.token;
       } else if (response.token) {
@@ -113,16 +121,21 @@ export const AuthProvider = ({ children }) => {
       } else if (response.data && response.data.access_token) {
         authToken = response.data.access_token;
       }
-      
+
       if (!authToken) {
         console.error('No token in response');
         throw new Error('Токен не получен от сервера');
       }
-      
+
       console.log('Setting token:', authToken);
       localStorage.setItem('token', authToken);
       setToken(authToken);
-      
+
+      // Сохраняем ВСЕ данные пользователя в localStorage
+      localStorage.setItem('userEmail', credentials.email);
+      localStorage.setItem('userName', credentials.name || credentials.email?.split('@')[0] || 'Пользователь');
+      localStorage.setItem('userPhone', credentials.phone || '');
+
       // Создаем пользователя
       const user = {
         id: Date.now(),
@@ -134,152 +147,72 @@ export const AuthProvider = ({ children }) => {
         completedAds: 0,
         incompleteAds: 0,
       };
-      
+
       setCurrentUser(user);
-      
-      // Сохраняем данные в localStorage
-      localStorage.setItem('userEmail', user.email);
-      localStorage.setItem('userName', user.name);
-      localStorage.setItem('userPhone', user.phone);
-      localStorage.setItem('userRegDate', user.regDate);
-      
       setUserAds([]);
-      
+
       return { success: true, data: response };
-      
+
     } catch (error) {
       console.error('=== LOGIN ERROR ===');
       console.error('Error:', error);
-      
+
       let errorMessage = error.message || 'Ошибка при входе';
-      
-      // Улучшаем сообщения об ошибках по ТЗ
-      if (error.status === 401) {
-        errorMessage = 'Неверный email или пароль';
-      } else if (error.status === 422) {
-        if (error.validationErrors && error.validationErrors.phone) {
-          errorMessage = 'Неверный email или пароль';
-        } else {
-          errorMessage = 'Ошибка валидации данных';
-        }
-      } else if (errorMessage.includes('Invalid credentials') || 
+
+      if (error.status === 401 || error.status === 422 || 
+          errorMessage.includes('Invalid credentials') || 
           errorMessage.includes('Unauthorized')) {
         errorMessage = 'Неверный email или пароль';
-      } else if (errorMessage.includes('email')) {
-        errorMessage = 'Неверный email или пароль';
-      } else if (errorMessage.includes('password')) {
-        errorMessage = 'Неверный email или пароль';
       }
-      
+
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  // Регистрация - ОБНОВЛЕНО: автоматический вход после регистрации
+  // Регистрация
   const register = async (userData) => {
     try {
       setLoading(true);
       console.log('=== REGISTRATION ATTEMPT ===');
       console.log('User data:', { ...userData, password: '***', password_confirmation: '***' });
-      
-      // 1. Регистрация
+
+      // Регистрация пользователя
       const response = await usersAPI.register(userData);
       console.log('Registration API response:', response);
-      
-      // 2. После успешной регистрации автоматически входим
-      console.log('=== AUTO LOGIN AFTER REGISTRATION ===');
-      
-      try {
-        const loginResponse = await usersAPI.login({
-          email: userData.email,
-          password: userData.password
-        });
-        
-        console.log('Auto login response:', loginResponse);
-        
-        // Сохраняем токен
-        let authToken = null;
-        if (loginResponse.data && loginResponse.data.token) {
-          authToken = loginResponse.data.token;
-        } else if (loginResponse.token) {
-          authToken = loginResponse.token;
-        } else if (loginResponse.data && loginResponse.data.access_token) {
-          authToken = loginResponse.data.access_token;
-        }
-        
-        if (authToken) {
-          localStorage.setItem('token', authToken);
-          setToken(authToken);
-        }
-        
-        // Создаем пользователя
-        const user = {
-          id: Date.now(),
-          name: userData.name,
-          email: userData.email,
-          phone: userData.phone,
-          regDate: new Date().toISOString().split('T')[0],
-          daysOnSite: '1 день',
-          completedAds: 0,
-          incompleteAds: 0,
-        };
-        
-        setCurrentUser(user);
-        
-        // Сохраняем данные в localStorage
-        localStorage.setItem('userEmail', user.email);
-        localStorage.setItem('userName', user.name);
-        localStorage.setItem('userPhone', user.phone);
-        localStorage.setItem('userRegDate', user.regDate);
-        
-        setUserAds([]);
-        
-        console.log('Registration and auto login successful');
-        return { success: true, data: response };
-        
-      } catch (loginError) {
-        console.error('Auto login failed, but registration was successful:', loginError);
-        
-        // Регистрация успешна, но вход не удался
-        // Создаем пользователя в любом случае
-        const user = {
-          id: Date.now(),
-          name: userData.name,
-          email: userData.email,
-          phone: userData.phone,
-          regDate: new Date().toISOString().split('T')[0],
-          daysOnSite: '1 день',
-          completedAds: 0,
-          incompleteAds: 0,
-        };
-        
-        setCurrentUser(user);
-        
-        // Сохраняем данные в localStorage
-        localStorage.setItem('userEmail', user.email);
-        localStorage.setItem('userName', user.name);
-        localStorage.setItem('userPhone', user.phone);
-        localStorage.setItem('userRegDate', user.regDate);
-        
-        return { 
-          success: true, 
-          data: response,
-          message: 'Регистрация успешна! Однако автоматический вход не удался. Пожалуйста, войдите в систему.'
-        };
-      }
-      
+
+      // Сохраняем ВСЕ данные пользователя в localStorage
+      localStorage.setItem('userEmail', userData.email);
+      localStorage.setItem('userName', userData.name);
+      localStorage.setItem('userPhone', userData.phone);
+
+      // Создаем пользователя
+      const user = {
+        id: Date.now(),
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        regDate: new Date().toISOString().split('T')[0],
+        daysOnSite: '1 день',
+        completedAds: 0,
+        incompleteAds: 0,
+      };
+
+      setCurrentUser(user);
+      setUserAds([]);
+
+      return { success: true, data: response };
+
     } catch (error) {
       console.error('=== REGISTRATION ERROR ===');
       console.error('Error:', error);
-      
+
       let errorMessage = error.message;
-      
-      // Обработка ошибок валидации от сервера по ТЗ
+
+      // Обработка ошибок валидации
       if (error.status === 422) {
         if (error.validationErrors) {
-          // Форматируем ошибки для пользователя
           const formattedErrors = [];
           for (const [field, errors] of Object.entries(error.validationErrors)) {
             if (Array.isArray(errors)) {
@@ -288,7 +221,7 @@ export const AuthProvider = ({ children }) => {
               formattedErrors.push(`${field}: ${errors}`);
             }
           }
-          
+
           if (formattedErrors.length > 0) {
             errorMessage = formattedErrors.join('; ');
           } else {
@@ -298,7 +231,7 @@ export const AuthProvider = ({ children }) => {
           errorMessage = 'Ошибка валидации данных';
         }
       }
-      
+
       throw new Error(errorMessage);
     } finally {
       setLoading(false);
@@ -322,22 +255,22 @@ export const AuthProvider = ({ children }) => {
   const updateUser = async (updatedData) => {
     try {
       setLoading(true);
-      
+
       // Обновляем локально
       const updatedUser = {
         ...currentUser,
         ...updatedData,
       };
-      
+
       setCurrentUser(updatedUser);
-      
-      // Сохраняем в localStorage для сохранения данных
+
+      // Сохраняем ВСЕ данные в localStorage
       if (updatedData.name) localStorage.setItem('userName', updatedData.name);
       if (updatedData.email) localStorage.setItem('userEmail', updatedData.email);
       if (updatedData.phone) localStorage.setItem('userPhone', updatedData.phone);
-      
+
       return { success: true };
-      
+
     } catch (error) {
       console.error('Update user error:', error);
       throw error;
@@ -367,7 +300,7 @@ export const AuthProvider = ({ children }) => {
           formData.append(key, updatedData[key]);
         }
       });
-      
+
       const response = await petsAPI.updatePet(id, formData, token);
       await refreshUserAds();
       return response;
@@ -400,7 +333,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     currentUser,
     userAds,
-    isAuthenticated: !!currentUser,
+    isAuthenticated: !!currentUser && !!token,
     loading,
     token,
     login,
