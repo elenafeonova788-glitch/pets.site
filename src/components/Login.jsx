@@ -17,20 +17,6 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Загружаем сохраненные данные при монтировании
-  useEffect(() => {
-    const savedEmail = localStorage.getItem('userEmail');
-    const savedName = localStorage.getItem('userName');
-    const savedPhone = localStorage.getItem('userPhone');
-    
-    if (savedEmail) {
-      setFormData(prev => ({
-        ...prev,
-        email: savedEmail
-      }));
-    }
-  }, []);
-
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -80,28 +66,15 @@ const Login = () => {
       setApiError('');
       setErrors({});
       
-      // Получаем сохраненные данные для передачи в login
-      const savedName = localStorage.getItem('userName') || '';
-      const savedPhone = localStorage.getItem('userPhone') || '';
-      
       const credentials = {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
-        name: savedName,
-        phone: savedPhone
       };
 
       console.log('Attempting login with:', { ...credentials, password: '***' });
       
       await login(credentials);
       console.log('Login successful, navigating to profile');
-      
-      // Если стоит флаг "запомнить меня", сохраняем данные
-      if (formData.rememberMe) {
-        localStorage.setItem('userEmail', credentials.email);
-        localStorage.setItem('userName', credentials.name);
-        localStorage.setItem('userPhone', credentials.phone);
-      }
       
       // Перенаправляем в личный кабинет
       navigate('/profile', { replace: true });
@@ -137,11 +110,9 @@ const Login = () => {
       } else if (errorMessage.includes('password')) {
         setErrors({ password: errorMessage });
       } else if (errorMessage.includes('Токен не получен')) {
-        // Обработка ошибки отсутствия токена
         errorMessage = 'Ошибка аутентификации. Попробуйте еще раз.';
         setApiError(errorMessage);
       } else {
-        // Общая ошибка
         setApiError(errorMessage);
       }
       
@@ -149,17 +120,6 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Автозаполнение для тестовых данных
-  const fillTestData = () => {
-    setFormData({
-      email: 'user@user.ru',
-      password: 'paSSword1',
-      rememberMe: false
-    });
-    setErrors({});
-    setApiError('');
   };
 
   return (
@@ -210,18 +170,6 @@ const Login = () => {
                   </Form.Control.Feedback>
                 </Form.Group>
 
-                <Form.Group className="mb-4">
-                  <Form.Check
-                    type="checkbox"
-                    id="rememberMe"
-                    name="rememberMe"
-                    label="Запомнить меня"
-                    checked={formData.rememberMe}
-                    onChange={handleChange}
-                    disabled={loading}
-                  />
-                </Form.Group>
-
                 <Button 
                   type="submit" 
                   variant="primary" 
@@ -250,7 +198,15 @@ const Login = () => {
                 <Button 
                   variant="outline-secondary" 
                   size="sm" 
-                  onClick={fillTestData}
+                  onClick={() => {
+                    setFormData({
+                      email: 'user@user.ru',
+                      password: 'paSSword1',
+                      rememberMe: false
+                    });
+                    setErrors({});
+                    setApiError('');
+                  }}
                   disabled={loading}
                 >
                   Заполнить тестовые данные
@@ -264,12 +220,6 @@ const Login = () => {
               <strong>Тестовые данные из ТЗ:</strong><br/>
               Email: user@user.ru<br/>
               Пароль: paSSword1<br/>
-              <br/>
-              <strong>После входа:</strong><br/>
-              Вы попадете в личный кабинет, где сможете:<br/>
-              1. Управлять своими данными<br/>
-              2. Добавлять и редактировать объявления<br/>
-              3. Просматривать историю действий
             </p>
           </div>
         </Col>

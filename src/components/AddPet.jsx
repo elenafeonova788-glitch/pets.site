@@ -150,18 +150,29 @@ const AddPet = () => {
       newErrors.userName = 'Поле обязательно для заполнения';
     } else if (!validateName(formData.userName)) {
       newErrors.userName = 'Допустимы только кириллица, пробел и дефис';
+    } else if (formData.userName.length > 50) {
+      newErrors.userName = 'Имя слишком длинное (максимум 50 символов)';
     }
 
     if (!formData.userPhone.trim()) {
       newErrors.userPhone = 'Поле обязательно для заполнения';
     } else if (!validatePhone(formData.userPhone)) {
       newErrors.userPhone = 'Допустимы только цифры и знак +';
+    } else {
+      const phoneDigits = formData.userPhone.replace(/\D/g, '');
+      if (phoneDigits.length < 10) {
+        newErrors.userPhone = 'Телефон должен содержать минимум 10 цифр';
+      } else if (phoneDigits.length > 15) {
+        newErrors.userPhone = 'Телефон слишком длинный (максимум 15 цифр)';
+      }
     }
 
     if (!formData.userEmail.trim()) {
       newErrors.userEmail = 'Поле обязательно для заполнения';
     } else if (!validateEmail(formData.userEmail)) {
-      newErrors.userEmail = 'Введите корректный email адрес';
+      newErrors.userEmail = 'Введите корректный email адрес (максимум 254 символа, локальная часть до 64 символов)';
+    } else if (formData.userEmail.length > 254) {
+      newErrors.userEmail = 'Email слишком длинный (максимум 254 символа)';
     }
 
     // Валидация информации о животном
@@ -203,6 +214,8 @@ const AddPet = () => {
         newErrors.registerPassword = 'Поле обязательно для заполнения';
       } else if (formData.registerPassword.length < 7) {
         newErrors.registerPassword = 'Пароль должен содержать минимум 7 символов';
+      } else if (formData.registerPassword.length > 100) {
+        newErrors.registerPassword = 'Пароль слишком длинный (максимум 100 символов)';
       } else if (!validatePassword(formData.registerPassword)) {
         newErrors.registerPassword = 'Пароль должен содержать минимум 1 цифру, 1 строчную и 1 заглавную букву';
       }
@@ -232,24 +245,23 @@ const AddPet = () => {
 
       let authToken = null;
       let userId = null;
-
-      // Шаг 1: Регистрация пользователя (если выбрана и не авторизован)
+      let userFromRegistration = null;
+      
       if (!isAuthenticated && formData.wantsToRegister) {
         try {
           // Регистрируем пользователя с ВСЕМИ данными
           const registrationData = {
-            name: formData.userName,
+            name: formData.userName.trim(),
             phone: formData.userPhone.replace(/\D/g, ''),
-            email: formData.userEmail,
+            email: formData.userEmail.trim(),
             password: formData.registerPassword,
             password_confirmation: formData.registerPasswordConfirmation,
             confirm: formData.confirm ? 1 : 0
           };
-
-          console.log('Регистрация пользователя:', registrationData);
+          console.log('Регистрация пользователя:', { ...registrationData, password: '***' });
           
           // Регистрируем пользователя через AuthContext
-          const registerResponse = await register(registrationData);
+          await register(registrationData);
           
           // После регистрации автоматически входим
           const loginData = {
@@ -270,7 +282,9 @@ const AddPet = () => {
           
           if (authToken) {
             // Используем метод login из AuthContext
-        await login(loginData);
+            const loginResult = await login(loginData);
+            userFromRegistration = loginResult.user;
+            userId = userFromRegistration.id;
           } else {
             throw new Error('Токен не получен после регистрации');
           }
@@ -347,6 +361,85 @@ const AddPet = () => {
         if (response.data && response.data.id) {
           alert('Объявление успешно добавлено!');
           
+          // === СОХРАНЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ В LOCALSTORAGE ДЛЯ КОНКРЕТНОГО ПОЛЬЗОВАТЕЛЯ ===
+          
+          // Определяем ID пользователя
+          let currentUserId;
+          if (isAuthenticated && currentUser) {
+            currentUserId = currentUser.id;
+          } else if (userFromRegistration && userFromRegistration.id) {
+            currentUserId = userFromRegistration.id;
+          } else {
+            // Если пользователь не авторизован, создаем временный ID на основе email
+            currentUserId = 'temp_' + formData.userEmail.replace(/[^a-z0-9]/gi, '_');
+          }
+          
+          // Сохраняем данные пользователя
+          const userDataToSave = {
+            id: currentUserId,
+            name: formData.userName,
+            phone: formData.userPhone.replace(/\D/g, ''),
+            email: formData.userEmail,
+            registrationDate: new Date().toISOString().split('T')[0],
+            ordersCount: 1,
+            petsCount: 1,
+          };
+          
+          // Сохраняем данные пользователя с ключом по ID
+          localStorage.setItem(`userData_${currentUserId}`, JSON.stringify(userDataToSave));
+          
+          // Получаем текущие объявления пользователя
+          const existingAdsStr = localStorage.getItem(`userAds_${currentUserId}`);
+          let existingAds = [];
+          
+          if (existingAdsStr) {
+            try {
+              existingAds = JSON.parse(existingAdsStr);
+            } catch (parseError) {
+              console.error('Ошибка парсинга существующих объявлений:', parseError);
+            }
+          }
+          
+          // Создаем новое объявление для сохранения
+          const newAd = {
+            id: response.data.id || Date.now(),
+            type: formData.type,
+            status: formData.status,
+            name: formData.name,
+            description: formData.description,
+            district: formData.district,
+            date: formData.date,
+            photos: photoPreviews,
+            mark: formData.mark || '',
+            adStatus: 'active',
+            userId: currentUserId,
+            createdAt: new Date().toISOString(),
+          };
+          
+          // Добавляем новое объявление в список
+          const updatedAds = [newAd, ...existingAds];
+          
+          // Сохраняем объявления пользователя
+          localStorage.setItem(`userAds_${currentUserId}`, JSON.stringify(updatedAds));
+          
+          // Если пользователь авторизован, сохраняем информацию о текущем пользователе
+          if (isAuthenticated || formData.wantsToRegister) {
+            localStorage.setItem('currentUser', JSON.stringify({
+              id: currentUserId,
+              email: formData.userEmail
+            }));
+          }
+          
+          // Также сохраняем отдельные поля для совместимости (если пользователь не авторизован)
+          if (!isAuthenticated && !formData.wantsToRegister) {
+            localStorage.setItem('lastUserName', formData.userName);
+            localStorage.setItem('lastUserPhone', formData.userPhone.replace(/\D/g, ''));
+            localStorage.setItem('lastUserEmail', formData.userEmail);
+          }
+          
+          console.log(`Данные сохранены для пользователя ${currentUserId}`);
+          // === КОНЕЦ СОХРАНЕНИЯ ДАННЫХ ===
+          
           // Сброс формы
           setFormData({
             userName: isAuthenticated && currentUser ? (currentUser.name || '') : '',
@@ -369,13 +462,6 @@ const AddPet = () => {
           setPhotoPreviews([]);
           setErrors({});
           setShowRegisterFields(false);
-
-          // Сохраняем данные пользователя в localStorage для будущего входа
-          if (!isAuthenticated && !formData.wantsToRegister) {
-            localStorage.setItem('userEmail', formData.userEmail);
-            localStorage.setItem('userName', formData.userName);
-            localStorage.setItem('userPhone', formData.userPhone);
-          }
 
           // Перенаправление
           if (isAuthenticated || formData.wantsToRegister) {
@@ -493,7 +579,7 @@ const AddPet = () => {
                         {errors.userName}
                       </Form.Control.Feedback>
                       <Form.Text className="text-muted">
-                        Только кириллица, пробелы и дефис
+                        Только кириллица, пробелы и дефис (максимум 50 символов)
                       </Form.Text>
                     </Col>
                     <Col md={6} className="mb-3">
@@ -511,7 +597,7 @@ const AddPet = () => {
                         {errors.userPhone}
                       </Form.Control.Feedback>
                       <Form.Text className="text-muted">
-                        Только цифры и знак +
+                        Только цифры и знак + (10-15 цифр)
                       </Form.Text>
                     </Col>
                   </Row>
@@ -530,6 +616,9 @@ const AddPet = () => {
                     <Form.Control.Feedback type="invalid">
                       {errors.userEmail}
                     </Form.Control.Feedback>
+                    <Form.Text className="text-muted">
+                      Корректный email адрес (максимум 254 символа)
+                    </Form.Text>
                   </Col>
                 </div>
 
@@ -566,7 +655,7 @@ const AddPet = () => {
                               {errors.registerPassword}
                             </Form.Control.Feedback>
                             <Form.Text className="text-muted">
-                              Минимум 7 символов: 1 цифра, 1 строчная, 1 заглавная буква
+                              Минимум 7 символов: 1 цифра, 1 строчная, 1 заглавная буква (максимум 100 символов)
                             </Form.Text>
                           </Col>
 

@@ -276,3 +276,28 @@ export const formatDate = (dateString) => {
     return dateString;
   }
 };
+export const calculateDaysOnSite = (registrationDate) => {
+  if (!registrationDate) return '1 день';
+  try {
+    let regDate;
+    if (registrationDate.includes('-')) {
+      const parts = registrationDate.split('-');
+      regDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else if (registrationDate.includes('.')) {
+      const parts = registrationDate.split('.');
+      regDate = new Date(parts[2], parts[1] - 1, parts[0]);
+    } else {
+      regDate = new Date(registrationDate);
+    }
+    
+    const now = new Date();
+    const diffTime = Math.abs(now - regDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) return '1 день';
+    if (diffDays < 5) return `${diffDays} дня`;
+    return `${diffDays} дней`;
+  } catch (error) {
+    return '1 день';
+  }
+};

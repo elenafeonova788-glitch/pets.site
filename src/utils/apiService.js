@@ -1,3 +1,4 @@
+// utils/apiService.js
 const API_BASE_URL = 'https://pets.сделай.site/api';
 
 // Функция для полного URL изображения
@@ -96,18 +97,17 @@ export const apiRequest = async (endpoint, options = {}) => {
     console.log(`URL: ${API_BASE_URL}${endpoint}`);
     console.log(`Method: ${method}`);
     console.log(`Headers:`, headers);
-    console.log(`Body:`, body ? (body instanceof FormData ? 'FormData' : { ...body, password: '***' }) : 'No body');
+    console.log(`Body:`, body ? (body instanceof FormData ? 'FormData' : body) : 'No body');
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
     
     console.log(`=== API RESPONSE ===`);
     console.log(`Status: ${response.status} ${response.statusText}`);
-    console.log(`Response Headers:`, Object.fromEntries(response.headers.entries()));
 
     // Для статуса 204 (No Content) возвращаем пустой объект
     if (response.status === 204) {
       console.log('204 No Content - registration successful');
-      return {};
+      return { success: true, status: 204 };
     }
 
     const responseText = await response.text();
@@ -123,40 +123,18 @@ export const apiRequest = async (endpoint, options = {}) => {
 
     if (!response.ok) {
       console.error(`=== API ERROR ===`);
+      console.error('Error data:', data);
       
       let errorMessage = 'Ошибка сервера';
-      let validationErrors = {};
       
-      if (data.error) {
-        console.log('Error in data.error:', data.error);
-        if (data.error.message) {
+      // Проверяем разные варианты структуры ошибки
+      if (data) {
+        if (data.error && data.error.message) {
           errorMessage = data.error.message;
-        }
-        if (data.error.errors) {
-          validationErrors = data.error.errors;
-        }
-      } else if (data.errors) {
-        console.log('Errors in data.errors:', data.errors);
-        validationErrors = data.errors;
-      } else if (data.message) {
-        errorMessage = data.message;
-      }
-      
-      // Форматируем ошибки валидации
-      if (Object.keys(validationErrors).length > 0) {
-        const formattedErrors = [];
-        for (const [field, errors] of Object.entries(validationErrors)) {
-          if (Array.isArray(errors)) {
-            errors.forEach(error => {
-              if (error) formattedErrors.push(`${field}: ${error}`);
-            });
-          } else if (typeof errors === 'string') {
-            formattedErrors.push(`${field}: ${errors}`);
-          }
-        }
-        
-        if (formattedErrors.length > 0) {
-          errorMessage = formattedErrors.join('; ');
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else if (typeof data === 'string') {
+          errorMessage = data;
         }
       }
       
@@ -165,7 +143,6 @@ export const apiRequest = async (endpoint, options = {}) => {
       const error = new Error(errorMessage);
       error.status = response.status;
       error.data = data;
-      error.validationErrors = validationErrors;
       throw error;
     }
 
@@ -174,9 +151,10 @@ export const apiRequest = async (endpoint, options = {}) => {
     
   } catch (error) {
     console.error('=== FETCH ERROR ===');
-    console.error('Error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
     
-    if (error.message.includes('Failed to fetch')) {
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
       error.message = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
     }
     
@@ -490,7 +468,6 @@ export const petsAPI = {
   
   getPetById: (id) => apiRequest(`/pets/${id}`),
   
-  // Обновленный метод addPet для работы с FormData
   addPet: (formData, token) => 
     apiRequest('/pets/new', {
       method: 'POST',
@@ -513,11 +490,18 @@ export const petsAPI = {
     }),
 };
 
-// API для пользователей - по ТЗ
+// API для пользователей - обновленная версия
+// utils/apiService.js - обновленные методы usersAPI
+
+// API для пользователей
 export const usersAPI = {
-  // Регистрация - JSON формат как в ТЗ
+  // Регистрация
   register: (userData) => {
-    console.log('Register data to send:', userData);
+    console.log('Register data to send:', { 
+      ...userData, 
+      password: '***', 
+      password_confirmation: '***' 
+    });
 
     const body = {
       name: userData.name,
@@ -536,7 +520,7 @@ export const usersAPI = {
     });
   },
 
-  // Вход - JSON формат как в ТЗ
+  // Вход
   login: (credentials) => {
     console.log('Login data to send:', { ...credentials, password: '***' });
 
@@ -553,14 +537,29 @@ export const usersAPI = {
     });
   },
 
-  // Получить данные пользователя
-  getUser: (id, token) =>
-    apiRequest(`/users/${id}`, {
+  // Получение текущего пользователя (по токену)
+  getCurrentUser: (token) =>
+    apiRequest('/users', {
       method: 'GET',
       token,
     }),
 
-  // Обновить телефон
+  // Получение объявлений пользователя
+  getUserOrders: (userId, token) =>
+    apiRequest(`/users/orders/${userId}`, {
+      method: 'GET',
+      token,
+    }),
+
+  // Обновление данных пользователя
+  updateUserProfile: (userId, userData, token) =>
+    apiRequest(`/users/${userId}`, {
+      method: 'PUT',
+      body: userData,
+      token,
+    }),
+
+  // Обновление телефона
   updatePhone: (id, phone, token) =>
     apiRequest(`/users/${id}/phone`, {
       method: 'PATCH',
@@ -568,18 +567,11 @@ export const usersAPI = {
       token,
     }),
 
-  // Обновить email
+  // Обновление email
   updateEmail: (id, email, token) =>
     apiRequest(`/users/${id}/email`, {
       method: 'PATCH',
       body: { email },
-      token,
-    }),
-
-  // Получить объявления пользователя
-  getUserOrders: (id, token) =>
-    apiRequest(`/users/orders/${id}`, {
-      method: 'GET',
       token,
     }),
 };

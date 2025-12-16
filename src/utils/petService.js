@@ -18,6 +18,13 @@ export const petService = {
         }
       });
       
+      // Для авторизованных пользователей не отправляем контактные данные
+      if (isAuthenticated) {
+        petFormData.delete('name');
+        petFormData.delete('phone');
+        petFormData.delete('email');
+      }
+      
       // Добавляем фото
       if (formData.photos && formData.photos.length > 0) {
         formData.photos.forEach((photo, index) => {
@@ -31,14 +38,6 @@ export const petService = {
       const response = await petsAPI.addPet(petFormData, isAuthenticated ? token : null);
       
       console.log('Pet added successfully:', response);
-      
-      // После успешного добавления, добавляем в локальный кэш для немедленного отображения
-      if (response.data && response.data.pet) {
-        // Сохраняем в localStorage для кэширования
-        const cachedPets = JSON.parse(localStorage.getItem('recentPets') || '[]');
-        cachedPets.unshift(response.data.pet);
-        localStorage.setItem('recentPets', JSON.stringify(cachedPets.slice(0, 10)));
-      }
       
       return response;
       
@@ -100,7 +99,6 @@ const savePetLocally = (formData) => {
     district: formData.district,
     date: formData.date,
     mark: formData.mark || '',
-    // ИСПРАВЛЕНО: Берем статус из formData
     status: formData.status || 'found',
     photos: formData.photos ? Array.from(formData.photos).map((file, index) => {
       return `local_photo_${index}_${Date.now()}`;
@@ -137,7 +135,6 @@ const transformPetData = (response) => {
       pets: response.data.pets.map(pet => ({
         id: pet.id,
         type: pet.kind || 'животное',
-        // ИСПРАВЛЕНО: Берем статус из API
         status: pet.status || 'found',
         name: pet.name || '',
         description: pet.description || 'Нет описания',

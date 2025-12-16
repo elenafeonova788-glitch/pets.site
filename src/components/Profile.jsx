@@ -1,8 +1,10 @@
+// components/Profile.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Button, Container, Row, Col, ListGroup, Badge, Spinner } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
-import { getAnimalType, getDistrictName } from '../utils/helpers';
+import { getAnimalType, getDistrictName, calculateDaysOnSite } from '../utils/helpers';
+import { usersAPI } from '../utils/apiService';
 
 const Profile = ({ editAd, deleteAdvertisement }) => {
   const { 
@@ -12,7 +14,8 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
     updateUser, 
     logout, 
     refreshUserAds,
-    loading: authLoading 
+    loading: authLoading,
+    token
   } = useAuth();
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -25,6 +28,52 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
+  // Обновление данных пользователя с сервера
+  useEffect(() => {
+    if (isAuthenticated && currentUser && token) {
+      // Загружаем объявления пользователя
+      refreshUserAds();
+      
+      // Пытаемся обновить данные с сервера
+      const updateUserFromAPI = async () => {
+        try {
+          console.log('Обновление данных пользователя с сервера...');
+          const response = await usersAPI.getCurrentUser(token);
+          console.log('Данные пользователя с API:', response);
+          
+          if (response.data) {
+            const updatedUser = {
+              ...currentUser,
+              name: response.data.name || currentUser.name,
+              phone: response.data.phone || currentUser.phone,
+              email: response.data.email || currentUser.email,
+              ordersCount: response.data.orders_count || currentUser.ordersCount,
+              registrationDate: response.data.created_at || currentUser.registrationDate,
+            };
+            
+            // Обновляем состояние пользователя
+            if (JSON.stringify(updatedUser) !== JSON.stringify(currentUser)) {
+              // Сохраняем в localStorage
+              localStorage.setItem('userData', JSON.stringify(updatedUser));
+              
+              // Обновляем через AuthContext
+              await updateUser({
+                name: updatedUser.name,
+                phone: updatedUser.phone,
+                email: updatedUser.email
+              });
+            }
+          }
+        } catch (error) {
+          console.log('Не удалось обновить данные с сервера:', error);
+        }
+      };
+      
+      updateUserFromAPI();
+    }
+  }, [isAuthenticated, currentUser, token, refreshUserAds, updateUser]);
+
+  // Инициализация формы редактирования
   useEffect(() => {
     if (currentUser) {
       setEditForm({
@@ -32,32 +81,6 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
         email: currentUser.email || '',
         phone: currentUser.phone || ''
       });
-    } else {
-      // Если пользователь не авторизован, но есть сохраненные данные в localStorage
-      const savedEmail = localStorage.getItem('userEmail');
-      const savedName = localStorage.getItem('userName');
-      const savedPhone = localStorage.getItem('userPhone');
-      const savedUserId = localStorage.getItem('userId');
-      
-      if (savedEmail || savedName || savedPhone) {
-        // Создаем временного пользователя из сохраненных данных
-        const tempUser = {
-          id: savedUserId || Date.now(),
-          name: savedName || '',
-          email: savedEmail || '',
-          phone: savedPhone || '',
-          regDate: new Date().toISOString().split('T')[0],
-          daysOnSite: '1 день',
-          completedAds: 0,
-          incompleteAds: 0,
-        };
-        
-        setEditForm({
-          name: tempUser.name,
-          email: tempUser.email,
-          phone: tempUser.phone
-        });
-      }
     }
   }, [currentUser]);
 
@@ -76,11 +99,6 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
       setEditMode(false);
       setSuccess('Данные профиля успешно обновлены!');
       
-      // Сохраняем в localStorage
-      localStorage.setItem('userEmail', editForm.email);
-      localStorage.setItem('userName', editForm.name);
-      localStorage.setItem('userPhone', editForm.phone);
-      
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       console.error('Update profile error:', error);
@@ -91,7 +109,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
   };
 
   const handleLogout = () => {
-    if (window.confirm('Вы уверены, что хотите выйти из системы? Ваши контактные данные будут сохранены для удобства.')) {
+    if (window.confirm('Вы уверены, что хотите выйти из системы?')) {
       logout();
       navigate('/');
     }
@@ -138,13 +156,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
     );
   }
 
-  // Проверяем наличие данных пользователя
-  const hasUserData = currentUser || 
-    localStorage.getItem('userEmail') || 
-    localStorage.getItem('userName') || 
-    localStorage.getItem('userPhone');
-
-  if (!isAuthenticated && !hasUserData) {
+  if (!isAuthenticated) {
     return (
       <Container>
         <div className="text-center">
@@ -172,7 +184,6 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
       
       <Row>
         <Col md={4} className="text-center mb-4">
-          {/* БАЗОВАЯ КАРТИНКА АВАТАРА ВМЕСТО ЗАГРУЗКИ */}
           <div className="mb-3 position-relative">
             <img 
               src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" 
@@ -191,11 +202,9 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
             </div>
           </div>
           <h5 id="userName" className="mb-2">
-            {currentUser?.name || localStorage.getItem('userName') || 'Пользователь'}
+            {currentUser?.name || 'Пользователь'}
           </h5>
-          <p className="text-muted mb-3">
-            {isAuthenticated ? 'Авторизованный пользователь' : 'Неавторизованный пользователь'}
-          </p>
+          <p className="text-muted mb-3">Авторизованный пользователь</p>
           <div className="d-flex flex-column gap-2">
             <Button 
               variant="outline-dark" 
@@ -205,25 +214,21 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
             >
               {editMode ? 'Отменить' : 'Редактировать профиль'}
             </Button>
-            {isAuthenticated && (
-              <Button 
-                variant="outline-dark" 
-                className="btn-sm" 
-                onClick={handleRefreshAds}
-                disabled={loading}
-              >
-                Обновить объявления
-              </Button>
-            )}
-            {isAuthenticated && (
-              <Button 
-                variant="outline-danger" 
-                className="btn-sm" 
-                onClick={handleLogout}
-              >
-                Выйти
-              </Button>
-            )}
+            <Button 
+              variant="outline-dark" 
+              className="btn-sm" 
+              onClick={handleRefreshAds}
+              disabled={loading}
+            >
+              Обновить объявления
+            </Button>
+            <Button 
+              variant="outline-danger" 
+              className="btn-sm" 
+              onClick={handleLogout}
+            >
+              Выйти
+            </Button>
           </div>
         </Col>
         
@@ -231,47 +236,47 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
           {!editMode ? (
             <div id="profileInfo">
               <Row className="mb-3">
+                <Col xs={4} className="fw-bold">Имя:</Col>
+                <Col xs={8} id="userNameDisplay">
+                  {currentUser?.name || 'Не указано'}
+                </Col>
+              </Row>
+              <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Email:</Col>
                 <Col xs={8} id="userEmail">
-                  {currentUser?.email || localStorage.getItem('userEmail') || 'Не указан'}
+                  {currentUser?.email || 'Не указан'}
                 </Col>
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Телефон:</Col>
                 <Col xs={8} id="userPhone">
-                  {currentUser?.phone || localStorage.getItem('userPhone') || 'Не указан'}
+                  {currentUser?.phone || 'Не указан'}
                 </Col>
               </Row>
               <Row className="mb-3">
-                <Col xs={4} className="fw-bold">Имя:</Col>
-                <Col xs={8} id="userNameDisplay">
-                  {currentUser?.name || localStorage.getItem('userName') || 'Не указано'}
+                <Col xs={4} className="fw-bold">Дата регистрации:</Col>
+                <Col xs={8} id="userRegDate">
+                  {currentUser?.registrationDate || 'Не указана'}
                 </Col>
               </Row>
-              {currentUser && (
-                <>
-                  <Row className="mb-3">
-                    <Col xs={4} className="fw-bold">Дата регистрации:</Col>
-                    <Col xs={8} id="userRegDate">{currentUser?.regDate || 'Не указана'}</Col>
-                  </Row>
-                  <Row className="mb-3">
-                    <Col xs={4} className="fw-bold">На сайте:</Col>
-                    <Col xs={8} id="userDaysOnSite">{currentUser?.daysOnSite || '1 день'}</Col>
-                  </Row>
-                  <Row className="mb-3">
-                    <Col xs={4} className="fw-bold">Завершенных объявлений:</Col>
-                    <Col xs={8} id="userCompletedAds">
-                      {currentUser?.completedAds || 0}
-                    </Col>
-                  </Row>
-                  <Row className="mb-3">
-                    <Col xs={4} className="fw-bold">Активных объявлений:</Col>
-                    <Col xs={8} id="userIncompleteAds">
-                      {currentUser?.incompleteAds || 0}
-                    </Col>
-                  </Row>
-                </>
-              )}
+              <Row className="mb-3">
+                <Col xs={4} className="fw-bold">На сайте:</Col>
+                <Col xs={8} id="userDaysOnSite">
+                  {calculateDaysOnSite(currentUser?.registrationDate)}
+                </Col>
+              </Row>
+              <Row className="mb-3">
+                <Col xs={4} className="fw-bold">Объявлений:</Col>
+                <Col xs={8} id="userOrdersCount">
+                  {currentUser?.ordersCount || 0}
+                </Col>
+              </Row>
+              <Row className="mb-3">
+                <Col xs={4} className="fw-bold">Питомцев пристроено:</Col>
+                <Col xs={8} id="userPetsCount">
+                  {currentUser?.petsCount || 0}
+                </Col>
+              </Row>
             </div>
           ) : (
             <div className="edit-form">
@@ -335,59 +340,55 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
             </div>
           )}
           
-          {isAuthenticated && (
-            <>
-              <hr />
-              
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 className="mb-0">Мои объявления ({userAds.length})</h6>
+          <hr />
+          
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h6 className="mb-0">Мои объявления ({userAds.length})</h6>
+            <Button variant="dark" className="btn-sm" onClick={() => navigate('/add-pet')}>
+              Добавить объявление
+            </Button>
+          </div>
+          
+          <ListGroup id="userAdsList">
+            {userAds.length === 0 ? (
+              <div className="text-center text-muted py-3">
+                <p>У вас пока нет объявлений</p>
                 <Button variant="dark" className="btn-sm" onClick={() => navigate('/add-pet')}>
                   Добавить объявление
                 </Button>
               </div>
-              
-              <ListGroup id="userAdsList">
-                {userAds.length === 0 ? (
-                  <div className="text-center text-muted py-3">
-                    <p>У вас пока нет объявлений</p>
-                    <Button variant="dark" className="btn-sm" onClick={() => navigate('/add-pet')}>
-                      Добавить объявление
+            ) : (
+              userAds.map(ad => (
+                <ListGroup.Item key={ad.id}>
+                  <div className="d-flex w-100 justify-content-between">
+                    <h6 className="mb-1">
+                      {ad.status === 'lost' ? 'Потерян' : 'Найден'}: {getAnimalType(ad.type)} {ad.name ? `- ${ad.name}` : ''}
+                    </h6>
+                    <small>{ad.date}</small>
+                  </div>
+                  <p className="mb-1">{ad.description.length > 100 ? `${ad.description.substring(0, 100)}...` : ad.description}</p>
+                  <small>Район: {getDistrictName(ad.district)}</small>
+                  <Badge bg={ad.adStatus === 'active' ? 'success' : 'secondary'} className="float-end">
+                    {ad.adStatus === 'active' ? 'Активно' : 'Завершено'}
+                  </Badge>
+                  <div className="mt-2">
+                    <Button variant="outline-primary" size="sm" onClick={() => editAd(ad)}>
+                      Редактировать
+                    </Button>
+                    <Button 
+                      variant="outline-danger" 
+                      size="sm" 
+                      className="ms-2" 
+                      onClick={() => handleDeleteAd(ad.id)}
+                      disabled={loading}
+                    >
+                      Удалить
                     </Button>
                   </div>
-                ) : (
-                  userAds.map(ad => (
-                    <ListGroup.Item key={ad.id}>
-                      <div className="d-flex w-100 justify-content-between">
-                        <h6 className="mb-1">
-                          {ad.status === 'lost' ? 'Потерян' : 'Найден'}: {getAnimalType(ad.type)} {ad.name ? `- ${ad.name}` : ''}
-                        </h6>
-                        <small>{ad.date}</small>
-                      </div>
-                      <p className="mb-1">{ad.description.length > 100 ? `${ad.description.substring(0, 100)}...` : ad.description}</p>
-                      <small>Район: {getDistrictName(ad.district)}</small>
-                      <Badge bg={ad.adStatus === 'active' ? 'success' : 'secondary'} className="float-end">
-                        {ad.adStatus === 'active' ? 'Активно' : 'Завершено'}
-                      </Badge>
-                      <div className="mt-2">
-                        <Button variant="outline-primary" size="sm" onClick={() => editAd(ad)}>
-                          Редактировать
-                        </Button>
-                        <Button 
-                          variant="outline-danger" 
-                          size="sm" 
-                          className="ms-2" 
-                          onClick={() => handleDeleteAd(ad.id)}
-                          disabled={loading}
-                        >
-                          Удалить
-                        </Button>
-                      </div>
-                    </ListGroup.Item>
-                  ))
-                )}
-              </ListGroup>
-            </>
-          )}
+                </ListGroup.Item>
+              ))
+            )}
+          </ListGroup>
         </Col>
       </Row>
     </Container>
