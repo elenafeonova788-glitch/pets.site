@@ -218,9 +218,11 @@ const Header = ({ showPetDetails }) => {
 
   // Выход из системы
   const handleLogout = () => {
+  if (window.confirm('Вы уверены, что хотите выйти из системы? Ваши данные будут сохранены для будущих входов.')) {
     logout();
     navigate('/');
-  };
+  }
+};
 
   // Проверка активной страницы
   const isActive = (path) => {

@@ -136,9 +136,14 @@ const Login = () => {
         setErrors({ email: errorMessage });
       } else if (errorMessage.includes('password')) {
         setErrors({ password: errorMessage });
+      } else if (errorMessage.includes('Токен не получен')) {
+        // Обработка ошибки отсутствия токена
+        errorMessage = 'Ошибка аутентификации. Попробуйте еще раз.';
+        setApiError(errorMessage);
+      } else {
+        // Общая ошибка
+        setApiError(errorMessage);
       }
-      
-      setApiError(errorMessage);
       
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {

@@ -68,10 +68,14 @@ export const apiRequest = async (endpoint, options = {}) => {
   } = options;
 
   const headers = {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
     ...customHeaders,
   };
+
+  // Если body не является FormData, устанавливаем Content-Type JSON
+  if (!(body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -83,7 +87,8 @@ export const apiRequest = async (endpoint, options = {}) => {
   };
 
   if (body) {
-    config.body = JSON.stringify(body);
+    // Если это FormData, отправляем как есть, иначе JSON
+    config.body = body instanceof FormData ? body : JSON.stringify(body);
   }
 
   try {
@@ -91,12 +96,13 @@ export const apiRequest = async (endpoint, options = {}) => {
     console.log(`URL: ${API_BASE_URL}${endpoint}`);
     console.log(`Method: ${method}`);
     console.log(`Headers:`, headers);
-    console.log(`Body:`, body ? { ...body, password: '***' } : 'No body');
+    console.log(`Body:`, body ? (body instanceof FormData ? 'FormData' : { ...body, password: '***' }) : 'No body');
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
     
     console.log(`=== API RESPONSE ===`);
     console.log(`Status: ${response.status} ${response.statusText}`);
+    console.log(`Response Headers:`, Object.fromEntries(response.headers.entries()));
 
     // Для статуса 204 (No Content) возвращаем пустой объект
     if (response.status === 204) {
@@ -105,7 +111,7 @@ export const apiRequest = async (endpoint, options = {}) => {
     }
 
     const responseText = await response.text();
-    console.log(`Response text:`, responseText);
+    console.log(`Raw response text:`, responseText);
 
     let data;
     try {
@@ -177,7 +183,6 @@ export const apiRequest = async (endpoint, options = {}) => {
     throw error;
   }
 };
-
 
 // Преобразование данных API в формат приложения
 export const transformPetData = (apiResponse, source = 'pets') => {
@@ -485,11 +490,13 @@ export const petsAPI = {
   
   getPetById: (id) => apiRequest(`/pets/${id}`),
   
+  // Обновленный метод addPet для работы с FormData
   addPet: (formData, token) => 
     apiRequest('/pets/new', {
       method: 'POST',
       body: formData,
       token,
+      headers: formData instanceof FormData ? {} : { 'Content-Type': 'application/json' }
     }),
   
   updatePet: (id, formData, token) =>
@@ -506,7 +513,6 @@ export const petsAPI = {
     }),
 };
 
-// API для пользователей - ОБНОВЛЕНО ПО ТЗ
 // API для пользователей - по ТЗ
 export const usersAPI = {
   // Регистрация - JSON формат как в ТЗ
@@ -577,6 +583,7 @@ export const usersAPI = {
       token,
     }),
 };
+
 // API для подписки
 export const subscriptionAPI = {
   subscribe: (email) =>

@@ -7,18 +7,18 @@ import { validateEmail, validatePhone, validateName, validatePassword } from '..
 import { petsAPI, usersAPI } from '../utils/apiService';
 
 const AddPet = () => {
-  const { isAuthenticated, currentUser, addUserAd, login, register } = useAuth();
+  const { isAuthenticated, currentUser, login, register } = useAuth();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    // Контактная информация
+    // Контактная информация (автоматически для авторизованных пользователей)
     userName: '',
     userPhone: '',
     userEmail: '',
 
     // Информация о животном
     type: '',
-    status: 'found', // По умолчанию "Найден"
+    status: 'found',
     name: '',
     description: '',
     district: '',
@@ -73,6 +73,7 @@ const AddPet = () => {
     const { name, value, type, checked, files } = e.target;
 
     if (type === 'file') {
+      // Валидация файлов
       if (files.length > 3) {
         alert('Можно загрузить не более 3 фотографий');
         e.target.value = '';
@@ -81,7 +82,7 @@ const AddPet = () => {
 
       const newPhotos = Array.from(files);
 
-      // ПРОВЕРКА ФОРМАТА - ТОЛЬКО PNG
+      // Проверка формата - ТОЛЬКО PNG
       const invalidFiles = newPhotos.filter(file => file.type !== 'image/png');
       if (invalidFiles.length > 0) {
         alert('Разрешены только файлы формата PNG!');
@@ -90,18 +91,15 @@ const AddPet = () => {
       }
 
       const newPreviews = [];
-
       newPhotos.forEach(file => {
-        if (file.type.match('image.*')) {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            newPreviews.push(e.target.result);
-            if (newPreviews.length === newPhotos.length) {
-              setPhotoPreviews(prev => [...prev, ...newPreviews].slice(0, 3));
-            }
-          };
-          reader.readAsDataURL(file);
-        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          newPreviews.push(e.target.result);
+          if (newPreviews.length === newPhotos.length) {
+            setPhotoPreviews(prev => [...prev, ...newPreviews].slice(0, 3));
+          }
+        };
+        reader.readAsDataURL(file);
       });
 
       setFormData(prev => ({
@@ -117,8 +115,6 @@ const AddPet = () => {
       // При включении регистрации показываем поля пароля
       if (name === 'wantsToRegister' && checked) {
         setShowRegisterFields(true);
-
-        // Фокусируемся на поле пароля после анимации
         setTimeout(() => {
           if (passwordRef.current) {
             passwordRef.current.focus();
@@ -145,6 +141,7 @@ const AddPet = () => {
     });
   };
 
+  // Валидация формы по ТЗ
   const validateForm = () => {
     const newErrors = {};
     
@@ -172,10 +169,6 @@ const AddPet = () => {
       newErrors.type = 'Поле обязательно для заполнения';
     }
 
-    if (!formData.status) {
-      newErrors.status = 'Поле обязательно для заполнения';
-    }
-
     if (!formData.description.trim()) {
       newErrors.description = 'Поле обязательно для заполнения';
     }
@@ -188,13 +181,18 @@ const AddPet = () => {
       newErrors.date = 'Поле обязательно для заполнения';
     }
 
-    // ОБЯЗАТЕЛЬНО МИНИМУМ 1 ФОТОГРАФИЯ
+    // Валидация фото - минимум 1 фото по ТЗ
     if (formData.photos.length === 0) {
       newErrors.photos = 'Необходимо загрузить хотя бы одну фотографию';
-    } else if (formData.photos.length > 3) {
-      newErrors.photos = 'Можно загрузить не более 3 фотографий';
+    } else {
+      // Проверяем формат фото
+      const invalidPhotos = formData.photos.filter(photo => photo.type !== 'image/png');
+      if (invalidPhotos.length > 0) {
+        newErrors.photos = 'Все фотографии должны быть в формате PNG';
+      }
     }
 
+    // Валидация согласия на обработку данных
     if (!formData.confirm) {
       newErrors.confirm = 'Необходимо согласие на обработку персональных данных';
     }
@@ -203,8 +201,10 @@ const AddPet = () => {
     if (!isAuthenticated && formData.wantsToRegister) {
       if (!formData.registerPassword) {
         newErrors.registerPassword = 'Поле обязательно для заполнения';
+      } else if (formData.registerPassword.length < 7) {
+        newErrors.registerPassword = 'Пароль должен содержать минимум 7 символов';
       } else if (!validatePassword(formData.registerPassword)) {
-        newErrors.registerPassword = 'Пароль должен содержать минимум 7 символов, включая 1 цифру, 1 строчную и 1 заглавную букву';
+        newErrors.registerPassword = 'Пароль должен содержать минимум 1 цифру, 1 строчную и 1 заглавную букву';
       }
 
       if (!formData.registerPasswordConfirmation) {
@@ -230,8 +230,8 @@ const AddPet = () => {
       setLoading(true);
       setApiError('');
 
+      let authToken = null;
       let userId = null;
-      let userToken = null;
 
       // Шаг 1: Регистрация пользователя (если выбрана и не авторизован)
       if (!isAuthenticated && formData.wantsToRegister) {
@@ -248,33 +248,31 @@ const AddPet = () => {
 
           console.log('Регистрация пользователя:', registrationData);
           
-          // Регистрируем пользователя
-          const registerResponse = await usersAPI.register(registrationData);
-          console.log('Регистрация успешна:', registerResponse);
-
-          // Автоматически входим после регистрации
+          // Регистрируем пользователя через AuthContext
+          const registerResponse = await register(registrationData);
+          
+          // После регистрации автоматически входим
+          const loginData = {
+            email: formData.userEmail,
+            password: formData.registerPassword,
+            name: formData.userName,
+            phone: formData.userPhone.replace(/\D/g, '')
+          };
+          
+          // Получаем токен с сервера
           const loginResponse = await usersAPI.login({
             email: formData.userEmail,
             password: formData.registerPassword
           });
 
           // Получаем токен из ответа
-          if (loginResponse.data && loginResponse.data.token) {
-            userToken = loginResponse.data.token;
-            localStorage.setItem('token', userToken);
-          } else if (loginResponse.token) {
-            userToken = loginResponse.token;
-            localStorage.setItem('token', userToken);
-          }
-
-          // Сохраняем все данные пользователя в localStorage
-          localStorage.setItem('userEmail', formData.userEmail);
-          localStorage.setItem('userName', formData.userName);
-          localStorage.setItem('userPhone', formData.userPhone);
-
-          // Получаем ID пользователя (предполагаем, что он есть в ответе)
-          if (registerResponse.data && registerResponse.data.user) {
-            userId = registerResponse.data.user.id;
+          authToken = loginResponse.data?.token || loginResponse.token;
+          
+          if (authToken) {
+            // Используем метод login из AuthContext
+        await login(loginData);
+          } else {
+            throw new Error('Токен не получен после регистрации');
           }
 
         } catch (authError) {
@@ -287,16 +285,22 @@ const AddPet = () => {
 
       // Шаг 2: Подготовка данных для объявления
       const petData = {
-        name: formData.userName,
+        name: formData.userName.trim(),
         phone: formData.userPhone.replace(/\D/g, ''),
-        email: formData.userEmail,
+        email: formData.userEmail.trim(),
         kind: formData.type,
-        description: formData.description,
+        description: formData.description.trim(),
         district: districts[formData.district] || formData.district,
         date: formData.date,
         mark: formData.mark || '',
         confirm: formData.confirm ? 1 : 0,
       };
+
+      // Если пользователь выбрал регистрацию, добавляем пароли
+      if (!isAuthenticated && formData.wantsToRegister) {
+        petData.password = formData.registerPassword;
+        petData.password_confirmation = formData.registerPasswordConfirmation;
+      }
 
       console.log('Данные для объявления:', petData);
 
@@ -305,22 +309,38 @@ const AddPet = () => {
 
       // Добавляем текстовые поля
       Object.keys(petData).forEach(key => {
-        formDataToSend.append(key, petData[key]);
+        if (petData[key] !== undefined && petData[key] !== null) {
+          formDataToSend.append(key, petData[key]);
+        }
       });
 
-      // Добавляем фото с правильными именами полей по ТЗ
+      // Добавляем фото с правильными именами полей по ТЗ (photo1, photo2, photo3)
       if (formData.photos && formData.photos.length > 0) {
         formData.photos.forEach((photo, index) => {
           // Используем имена photo1, photo2, photo3 как ожидает API
           formDataToSend.append(`photo${index + 1}`, photo);
         });
+        
+        // Добавляем пустые поля для недостающих фото
+        for (let i = formData.photos.length + 1; i <= 3; i++) {
+          formDataToSend.append(`photo${i}`, '');
+        }
+      }
+
+      // Отладка: проверяем что отправляем
+      console.log('Отправляемые данные FormData:');
+      for (let [key, value] of formDataToSend.entries()) {
+        console.log(`${key}:`, value);
       }
 
       // Отправка объявления
       try {
         // Используем токен, если пользователь зарегистрировался или уже авторизован
-        const token = userToken || (isAuthenticated ? localStorage.getItem('token') : null);
+        const token = authToken || (isAuthenticated ? localStorage.getItem('authToken') || localStorage.getItem('token') : null);
         
+        console.log('Используемый токен для отправки:', token);
+        
+        // Отправляем запрос через apiService
         const response = await petsAPI.addPet(formDataToSend, token);
         console.log('Объявление добавлено:', response);
 
@@ -368,7 +388,30 @@ const AddPet = () => {
         }
       } catch (apiError) {
         console.error('Ошибка API при добавлении объявления:', apiError);
-        setApiError('Ошибка при добавлении объявления: ' + (apiError.message || 'Не удалось добавить объявление'));
+        
+        let errorMessage = 'Ошибка при добавлении объявления';
+        
+        if (apiError.status === 422 && apiError.data && apiError.data.errors) {
+          // Форматируем ошибки валидации с сервера
+          const validationErrors = apiError.data.errors;
+          const formattedErrors = [];
+          
+          for (const [field, errors] of Object.entries(validationErrors)) {
+            if (Array.isArray(errors)) {
+              errors.forEach(err => formattedErrors.push(`${field}: ${err}`));
+            } else if (typeof errors === 'string') {
+              formattedErrors.push(`${field}: ${errors}`);
+            }
+          }
+          
+          if (formattedErrors.length > 0) {
+            errorMessage = formattedErrors.join('; ');
+          }
+        } else if (apiError.message) {
+          errorMessage = apiError.message;
+        }
+        
+        setApiError(errorMessage);
       }
 
     } catch (error) {
@@ -436,7 +479,7 @@ const AddPet = () => {
                   <h5 className="mb-3">Контактная информация</h5>
                   <Row>
                     <Col md={6} className="mb-3">
-                      <Form.Label className="required-field">Имя</Form.Label>
+                      <Form.Label className="required-field">Имя *</Form.Label>
                       <Form.Control
                         type="text"
                         name="userName"
@@ -444,14 +487,17 @@ const AddPet = () => {
                         onChange={handleChange}
                         isInvalid={!!errors.userName}
                         disabled={loading || (isAuthenticated && currentUser)}
-                        placeholder="Ваше имя"
+                        placeholder="Иван Иванов"
                       />
                       <Form.Control.Feedback type="invalid">
                         {errors.userName}
                       </Form.Control.Feedback>
+                      <Form.Text className="text-muted">
+                        Только кириллица, пробелы и дефис
+                      </Form.Text>
                     </Col>
                     <Col md={6} className="mb-3">
-                      <Form.Label className="required-field">Телефон</Form.Label>
+                      <Form.Label className="required-field">Телефон *</Form.Label>
                       <Form.Control
                         type="tel"
                         name="userPhone"
@@ -459,16 +505,19 @@ const AddPet = () => {
                         onChange={handleChange}
                         isInvalid={!!errors.userPhone}
                         disabled={loading || (isAuthenticated && currentUser)}
-                        placeholder="+7 (XXX) XXX-XX-XX"
+                        placeholder="89001234567 или +79001234567"
                       />
                       <Form.Control.Feedback type="invalid">
                         {errors.userPhone}
                       </Form.Control.Feedback>
+                      <Form.Text className="text-muted">
+                        Только цифры и знак +
+                      </Form.Text>
                     </Col>
                   </Row>
 
                   <Col md={6} className="mb-3">
-                    <Form.Label className="required-field">Email</Form.Label>
+                    <Form.Label className="required-field">Email *</Form.Label>
                     <Form.Control
                       type="email"
                       name="userEmail"
@@ -476,7 +525,7 @@ const AddPet = () => {
                       onChange={handleChange}
                       isInvalid={!!errors.userEmail}
                       disabled={loading || (isAuthenticated && currentUser)}
-                      placeholder="example@mail.ru"
+                      placeholder="user@user.ru"
                     />
                     <Form.Control.Feedback type="invalid">
                       {errors.userEmail}
@@ -502,7 +551,7 @@ const AddPet = () => {
                       <div>
                         <Row>
                           <Col md={6} className="mb-3">
-                            <Form.Label className="required-field">Пароль</Form.Label>
+                            <Form.Label className="required-field">Пароль *</Form.Label>
                             <Form.Control
                               type="password"
                               name="registerPassword"
@@ -522,7 +571,7 @@ const AddPet = () => {
                           </Col>
 
                           <Col md={6} className="mb-3">
-                            <Form.Label className="required-field">Подтверждение пароля</Form.Label>
+                            <Form.Label className="required-field">Подтверждение пароля *</Form.Label>
                             <Form.Control
                               type="password"
                               name="registerPasswordConfirmation"
@@ -547,25 +596,7 @@ const AddPet = () => {
 
                   <Row>
                     <Col md={6} className="mb-3">
-                      <Form.Label className="required-field">Статус</Form.Label>
-                      <Form.Select
-                        name="status"
-                        value={formData.status}
-                        onChange={handleChange}
-                        isInvalid={!!errors.status}
-                        disabled={loading}
-                      >
-                        <option value="">Выберите статус</option>
-                        <option value="found">Найден (животное нашло приют)</option>
-                        <option value="lost">Потерян (поиск хозяина)</option>
-                      </Form.Select>
-                      <Form.Control.Feedback type="invalid">
-                        {errors.status}
-                      </Form.Control.Feedback>
-                    </Col>
-
-                    <Col md={6} className="mb-3">
-                      <Form.Label className="required-field">Тип животного</Form.Label>
+                      <Form.Label className="required-field">Тип животного *</Form.Label>
                       <Form.Select
                         name="type"
                         value={formData.type}
@@ -586,34 +617,48 @@ const AddPet = () => {
                         {errors.type}
                       </Form.Control.Feedback>
                     </Col>
+
+                    <Col md={6} className="mb-3">
+                      <Form.Label>Статус</Form.Label>
+                      <Form.Select
+                        name="status"
+                        value={formData.status}
+                        onChange={handleChange}
+                        disabled={loading}
+                      >
+                        <option value="found">Найден (животное нашло приют)</option>
+                        <option value="lost">Потерян (поиск хозяина)</option>
+                      </Form.Select>
+                    </Col>
                   </Row>
 
-                  <Col md={6} className="mb-3">
-                    <Form.Label>Кличка животного</Form.Label>
-                    <Form.Control
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      disabled={loading}
-                      placeholder="Введите кличку"
-                    />
-                  </Col>
-
-                  <Col md={6} className="mb-3">
-                    <Form.Label>Клеймо/Метка</Form.Label>
-                    <Form.Control
-                      type="text"
-                      name="mark"
-                      value={formData.mark}
-                      onChange={handleChange}
-                      disabled={loading}
-                      placeholder="Если есть"
-                    />
-                  </Col>
+                  <Row>
+                    <Col md={6} className="mb-3">
+                      <Form.Label>Кличка животного</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        disabled={loading}
+                        placeholder="Введите кличку"
+                      />
+                    </Col>
+                    <Col md={6} className="mb-3">
+                      <Form.Label>Клеймо/Метка</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="mark"
+                        value={formData.mark}
+                        onChange={handleChange}
+                        disabled={loading}
+                        placeholder="Если есть"
+                      />
+                    </Col>
+                  </Row>
 
                   <Col md={12} className="mb-3">
-                    <Form.Label className="required-field">Описание</Form.Label>
+                    <Form.Label className="required-field">Описание *</Form.Label>
                     <Form.Control
                       as="textarea"
                       rows={3}
@@ -631,7 +676,7 @@ const AddPet = () => {
 
                   <Row>
                     <Col md={6} className="mb-3">
-                      <Form.Label className="required-field">Район</Form.Label>
+                      <Form.Label className="required-field">Район *</Form.Label>
                       <Form.Select
                         name="district"
                         value={formData.district}
@@ -649,7 +694,7 @@ const AddPet = () => {
                       </Form.Control.Feedback>
                     </Col>
                     <Col md={6} className="mb-3">
-                      <Form.Label className="required-field">Дата</Form.Label>
+                      <Form.Label className="required-field">Дата *</Form.Label>
                       <Form.Control
                         type="date"
                         name="date"
@@ -666,7 +711,7 @@ const AddPet = () => {
 
                   <div className="mb-3">
                     <Form.Label className="required-field">
-                      Фотографии животного (минимум 1, максимум 3, ТОЛЬКО PNG)
+                      Фотографии животного (минимум 1, максимум 3, ТОЛЬКО PNG) *
                     </Form.Label>
                     <Form.Control
                       type="file"
@@ -680,9 +725,9 @@ const AddPet = () => {
                     <Form.Control.Feedback type="invalid">
                       {errors.photos}
                     </Form.Control.Feedback>
-                    <div className="form-text">
+                    <Form.Text className="text-muted">
                       Выберите от 1 до 3 фотографий животного в формате PNG. Первая фотография обязательна.
-                    </div>
+                    </Form.Text>
 
                     {photoPreviews.length > 0 && (
                       <div className="mt-3">
@@ -735,7 +780,7 @@ const AddPet = () => {
                   type="checkbox"
                   id="petConfirm"
                   name="confirm"
-                  label="Я согласен с условиями использования и обработкой персональных данных"
+                  label="Я согласен с условиями использования и обработкой персональных данных *"
                   checked={formData.confirm}
                   onChange={handleChange}
                   isInvalid={!!errors.confirm}
