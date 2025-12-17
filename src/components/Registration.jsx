@@ -48,27 +48,24 @@ const Registration = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    // Валидация имени - кириллица, пробел, дефис
+    // Валидация имени
     if (!formData.name.trim()) {
       newErrors.name = 'Поле обязательно для заполнения';
     } else if (!validateName(formData.name)) {
       newErrors.name = 'Допустимы только кириллица, пробел и дефис';
     } else if (formData.name.length > 50) {
-      newErrors.name = 'Имя слишком длинное (максимум 50 символов)';
+      newErrors.name = 'Имя слишком длинное';
     }
 
-    // Валидация телефона - только цифры и знак +
+    // Валидация телефона
     if (!formData.phone.trim()) {
       newErrors.phone = 'Поле обязательно для заполнения';
     } else if (!validatePhone(formData.phone)) {
       newErrors.phone = 'Допустимы только цифры и знак +';
     } else {
-      // Проверка минимальной и максимальной длины телефона
       const phoneDigits = formData.phone.replace(/\D/g, '');
       if (phoneDigits.length < 10) {
         newErrors.phone = 'Телефон должен содержать минимум 10 цифр';
-      } else if (phoneDigits.length > 15) {
-        newErrors.phone = 'Телефон слишком длинный (максимум 15 цифр)';
       }
     }
 
@@ -76,18 +73,14 @@ const Registration = () => {
     if (!formData.email.trim()) {
       newErrors.email = 'Поле обязательно для заполнения';
     } else if (!validateEmail(formData.email)) {
-      newErrors.email = 'Введите корректный email адрес (максимум 254 символа, локальная часть до 64 символов)';
-    } else if (formData.email.length > 254) {
-      newErrors.email = 'Email слишком длинный (максимум 254 символа)';
+      newErrors.email = 'Введите корректный email адрес';
     }
 
-    // Валидация пароля - минимум 7 символов: 1 цифра, 1 строчная, 1 заглавная
+    // Валидация пароля
     if (!formData.password) {
       newErrors.password = 'Поле обязательно для заполнения';
     } else if (formData.password.length < 7) {
       newErrors.password = 'Пароль должен содержать минимум 7 символов';
-    } else if (formData.password.length > 100) {
-      newErrors.password = 'Пароль слишком длинный (максимум 100 символов)';
     } else if (!validatePassword(formData.password)) {
       newErrors.password = 'Пароль должен содержать хотя бы одну цифру, одну строчную и одну заглавную букву';
     }
@@ -109,16 +102,13 @@ const Registration = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('=== REGISTRATION FORM SUBMIT ===');
     
     // Валидация формы
     const newErrors = validateForm();
     
     if (Object.keys(newErrors).length > 0) {
-      console.log('Form validation errors:', newErrors);
       setErrors(newErrors);
       setApiError('Пожалуйста, исправьте ошибки в форме.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -128,7 +118,7 @@ const Registration = () => {
       setSuccess('');
       setErrors({});
       
-      // Форматируем телефон: оставляем только цифры
+      // Форматируем телефон
       let formattedPhone = formData.phone.replace(/\D/g, '');
       
       // Подготавливаем данные для отправки
@@ -140,16 +130,9 @@ const Registration = () => {
         password_confirmation: formData.password_confirmation,
         confirm: formData.agreeToTerms ? 1 : 0,
       };
-
-      console.log('Sending ALL user data to register:', { 
-        ...userData, 
-        password: '***', 
-        password_confirmation: '***' 
-      });
       
       // Регистрация
       const result = await register(userData);
-      console.log('Registration result:', result);
       
       if (result.success) {
         setSuccess(result.message || 'Регистрация прошла успешно!');
@@ -168,9 +151,6 @@ const Registration = () => {
       }
       
     } catch (error) {
-      console.error('=== REGISTRATION ERROR IN COMPONENT ===');
-      console.error('Error:', error);
-      
       let errorMessage = error.message || 'Ошибка при регистрации';
       
       // Упрощаем обработку ошибок
@@ -188,22 +168,16 @@ const Registration = () => {
         // Общая ошибка
         setApiError(errorMessage);
       }
-      
-      // Прокручиваем к ошибке
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
   };
 
-  // Функция для заполнения тестовых данных
   const fillTestData = () => {
-    // Генерируем случайные тестовые данные
-    const randomNum = Math.floor(Math.random() * 1000);
     setFormData({
       name: 'Тест Пользователь',
-      phone: `8900${1000000 + randomNum}`,
-      email: `test${randomNum}@example.com`,
+      phone: '89001234567',
+      email: 'test@example.com',
       password: 'Test1234',
       password_confirmation: 'Test1234',
       agreeToTerms: true
@@ -250,9 +224,6 @@ const Registration = () => {
                   <Form.Control.Feedback type="invalid">
                     {errors.name}
                   </Form.Control.Feedback>
-                  <Form.Text className="text-muted">
-                    Только кириллица, пробелы и дефис (максимум 50 символов)
-                  </Form.Text>
                 </Form.Group>
 
                 <Form.Group className="mb-3">
@@ -269,9 +240,6 @@ const Registration = () => {
                   <Form.Control.Feedback type="invalid">
                     {errors.phone}
                   </Form.Control.Feedback>
-                  <Form.Text className="text-muted">
-                    Пример: 89001234567 или +79001234567 (10-15 цифр)
-                  </Form.Text>
                 </Form.Group>
 
                 <Form.Group className="mb-3">
@@ -288,9 +256,6 @@ const Registration = () => {
                   <Form.Control.Feedback type="invalid">
                     {errors.email}
                   </Form.Control.Feedback>
-                  <Form.Text className="text-muted">
-                    Этот email будет использоваться для входа (максимум 254 символа)
-                  </Form.Text>
                 </Form.Group>
 
                 <Form.Group className="mb-3">
@@ -307,9 +272,6 @@ const Registration = () => {
                   <Form.Control.Feedback type="invalid">
                     {errors.password}
                   </Form.Control.Feedback>
-                  <Form.Text className="text-muted">
-                    Минимум 7 символов: хотя бы 1 цифра, 1 строчная и 1 заглавная буква (максимум 100 символов)
-                  </Form.Text>
                 </Form.Group>
 
                 <Form.Group className="mb-3">
@@ -381,18 +343,6 @@ const Registration = () => {
               </div>
             </Card.Body>
           </Card>
-          
-          <div className="mt-4 text-center">
-            <p className="text-muted small">
-              <strong>Пример данных для регистрации:</strong><br/>
-              Имя: Тест Пользователь (кириллица, максимум 50 символов)<br/>
-              Телефон: 89001234567 (10-15 цифр)<br/>
-              Email: любой валидный email (максимум 254 символа)<br/>
-              Пароль: Test1234 (7-100 символов, 1 цифра, 1 строчная, 1 заглавная)<br/>
-              Подтверждение пароля: Test1234 (должно совпадать)<br/>
-              Согласие: обязательно
-            </p>
-          </div>
         </Col>
       </Row>
     </Container>

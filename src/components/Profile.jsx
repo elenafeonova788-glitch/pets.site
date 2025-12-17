@@ -1,88 +1,57 @@
-// components/Profile.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Button, Container, Row, Col, ListGroup, Badge, Spinner } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
+import EditPetModal from './EditPetModal'; // Нужно будет создать этот компонент
 import { getAnimalType, getDistrictName, calculateDaysOnSite } from '../utils/helpers';
-import { usersAPI } from '../utils/apiService';
 
-const Profile = ({ editAd, deleteAdvertisement }) => {
+const Profile = () => {
   const { 
+    currentUser: user,
+    userAds,
     isAuthenticated, 
-    currentUser, 
-    userAds, 
-    updateUser, 
     logout, 
+    updateUser,
     refreshUserAds,
-    loading: authLoading,
-    token
+    deleteUserAd,
+    loading: authLoading 
   } = useAuth();
+  
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
     phone: ''
   });
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedPet, setSelectedPet] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletePetId, setDeletePetId] = useState(null);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  
   const navigate = useNavigate();
 
-  // Обновление данных пользователя с сервера
+  // Инициализация формы
   useEffect(() => {
-    if (isAuthenticated && currentUser && token) {
-      // Загружаем объявления пользователя
-      refreshUserAds();
-      
-      // Пытаемся обновить данные с сервера
-      const updateUserFromAPI = async () => {
-        try {
-          console.log('Обновление данных пользователя с сервера...');
-          const response = await usersAPI.getCurrentUser(token);
-          console.log('Данные пользователя с API:', response);
-          
-          if (response.data) {
-            const updatedUser = {
-              ...currentUser,
-              name: response.data.name || currentUser.name,
-              phone: response.data.phone || currentUser.phone,
-              email: response.data.email || currentUser.email,
-              ordersCount: response.data.orders_count || currentUser.ordersCount,
-              registrationDate: response.data.created_at || currentUser.registrationDate,
-            };
-            
-            // Обновляем состояние пользователя
-            if (JSON.stringify(updatedUser) !== JSON.stringify(currentUser)) {
-              // Сохраняем в localStorage
-              localStorage.setItem('userData', JSON.stringify(updatedUser));
-              
-              // Обновляем через AuthContext
-              await updateUser({
-                name: updatedUser.name,
-                phone: updatedUser.phone,
-                email: updatedUser.email
-              });
-            }
-          }
-        } catch (error) {
-          console.log('Не удалось обновить данные с сервера:', error);
-        }
-      };
-      
-      updateUserFromAPI();
-    }
-  }, [isAuthenticated, currentUser, token, refreshUserAds, updateUser]);
-
-  // Инициализация формы редактирования
-  useEffect(() => {
-    if (currentUser) {
+    if (user) {
       setEditForm({
-        name: currentUser.name || '',
-        email: currentUser.email || '',
-        phone: currentUser.phone || ''
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || ''
       });
     }
-  }, [currentUser]);
+  }, [user]);
+
+  // Обновление данных при загрузке
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshUserAds();
+    }
+  }, [isAuthenticated, refreshUserAds]);
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
@@ -91,7 +60,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
 
   const saveProfileChanges = async () => {
     try {
-      setLoading(true);
+      setIsUpdatingProfile(true);
       setError('');
       setSuccess('');
       
@@ -101,10 +70,9 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
       
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
-      console.error('Update profile error:', error);
-      setError('Ошибка при обновлении профиля');
+      setError('Ошибка при обновлении профиля: ' + error.message);
     } finally {
-      setLoading(false);
+      setIsUpdatingProfile(false);
     }
   };
 
@@ -122,7 +90,6 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
       setSuccess('Объявления обновлены!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
-      console.error('Refresh ads error:', error);
       setError('Ошибка при обновлении объявлений');
     } finally {
       setLoading(false);
@@ -132,16 +99,62 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
   const handleDeleteAd = async (adId) => {
     if (window.confirm('Вы уверены, что хотите удалить это объявление?')) {
       try {
-        setLoading(true);
-        await deleteAdvertisement(adId);
+        setIsDeleting(true);
+        setDeletePetId(adId);
+        await deleteUserAd(adId);
         setSuccess('Объявление успешно удалено!');
         setTimeout(() => setSuccess(''), 3000);
       } catch (error) {
-        console.error('Delete ad error:', error);
         setError('Ошибка при удалении объявления');
       } finally {
-        setLoading(false);
+        setIsDeleting(false);
+        setDeletePetId(null);
       }
+    }
+  };
+
+  const handleEditPet = (pet) => {
+    setSelectedPet(pet);
+    setEditModalOpen(true);
+  };
+
+  const handlePetUpdated = () => {
+    setSuccess('Объявление успешно обновлено!');
+    refreshUserAds();
+    setEditModalOpen(false);
+    setSelectedPet(null);
+  };
+
+  const getStatusText = (status) => {
+    const statusMap = {
+      'active': 'Активно',
+      'wasFound': 'Хозяин найден',
+      'onModeration': 'На модерации',
+      'archive': 'В архиве',
+      'published': 'Опубликовано',
+      'pending': 'На рассмотрении'
+    };
+    return statusMap[status] || status;
+  };
+
+  const getStatusClass = (status) => {
+    const classMap = {
+      'active': 'success',
+      'wasFound': 'info',
+      'onModeration': 'warning',
+      'archive': 'secondary',
+      'published': 'success',
+      'pending': 'warning'
+    };
+    return classMap[status] || 'secondary';
+  };
+
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU');
+    } catch {
+      return dateString;
     }
   };
 
@@ -197,12 +210,9 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
                 padding: '3px'
               }}
             />
-            <div className="position-absolute bottom-0 end-0 bg-primary rounded-circle p-1">
-              <i className="bi bi-check-circle-fill text-white"></i>
-            </div>
           </div>
           <h5 id="userName" className="mb-2">
-            {currentUser?.name || 'Пользователь'}
+            {user?.name || 'Пользователь'}
           </h5>
           <p className="text-muted mb-3">Авторизованный пользователь</p>
           <div className="d-flex flex-column gap-2">
@@ -210,7 +220,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
               variant="outline-dark" 
               className="btn-sm" 
               onClick={() => setEditMode(!editMode)}
-              disabled={loading}
+              disabled={loading || isUpdatingProfile}
             >
               {editMode ? 'Отменить' : 'Редактировать профиль'}
             </Button>
@@ -218,7 +228,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
               variant="outline-dark" 
               className="btn-sm" 
               onClick={handleRefreshAds}
-              disabled={loading}
+              disabled={loading || isUpdatingProfile}
             >
               Обновить объявления
             </Button>
@@ -226,6 +236,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
               variant="outline-danger" 
               className="btn-sm" 
               onClick={handleLogout}
+              disabled={loading || isUpdatingProfile}
             >
               Выйти
             </Button>
@@ -238,43 +249,31 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Имя:</Col>
                 <Col xs={8} id="userNameDisplay">
-                  {currentUser?.name || 'Не указано'}
+                  {user?.name || 'Не указано'}
                 </Col>
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Email:</Col>
                 <Col xs={8} id="userEmail">
-                  {currentUser?.email || 'Не указан'}
+                  {user?.email || 'Не указан'}
                 </Col>
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Телефон:</Col>
                 <Col xs={8} id="userPhone">
-                  {currentUser?.phone || 'Не указан'}
-                </Col>
-              </Row>
-              <Row className="mb-3">
-                <Col xs={4} className="fw-bold">Дата регистрации:</Col>
-                <Col xs={8} id="userRegDate">
-                  {currentUser?.registrationDate || 'Не указана'}
-                </Col>
-              </Row>
-              <Row className="mb-3">
-                <Col xs={4} className="fw-bold">На сайте:</Col>
-                <Col xs={8} id="userDaysOnSite">
-                  {calculateDaysOnSite(currentUser?.registrationDate)}
+                  {user?.phone || 'Не указан'}
                 </Col>
               </Row>
               <Row className="mb-3">
                 <Col xs={4} className="fw-bold">Объявлений:</Col>
                 <Col xs={8} id="userOrdersCount">
-                  {currentUser?.ordersCount || 0}
+                  {userAds.length}
                 </Col>
               </Row>
               <Row className="mb-3">
-                <Col xs={4} className="fw-bold">Питомцев пристроено:</Col>
-                <Col xs={8} id="userPetsCount">
-                  {currentUser?.petsCount || 0}
+                <Col xs={4} className="fw-bold">На сайте:</Col>
+                <Col xs={8} id="userDaysOnSite">
+                  {calculateDaysOnSite(user?.registrationDate)}
                 </Col>
               </Row>
             </div>
@@ -291,7 +290,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
                   value={editForm.name}
                   onChange={handleEditChange}
                   required 
-                  disabled={loading}
+                  disabled={isUpdatingProfile}
                 />
               </div>
               <div className="mb-3">
@@ -304,7 +303,7 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
                   value={editForm.email}
                   onChange={handleEditChange}
                   required 
-                  disabled={loading}
+                  disabled={isUpdatingProfile}
                 />
               </div>
               <div className="mb-3">
@@ -317,22 +316,27 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
                   value={editForm.phone}
                   onChange={handleEditChange}
                   required 
-                  disabled={loading}
+                  disabled={isUpdatingProfile}
                 />
               </div>
               <div className="mb-3">
                 <Button 
                   variant="primary" 
                   onClick={saveProfileChanges}
-                  disabled={loading}
+                  disabled={isUpdatingProfile}
                 >
-                  {loading ? 'Сохранение...' : 'Сохранить изменения'}
+                  {isUpdatingProfile ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Сохранение...
+                    </>
+                  ) : 'Сохранить изменения'}
                 </Button>
                 <Button 
                   variant="outline-secondary" 
                   className="ms-2" 
                   onClick={() => setEditMode(false)}
-                  disabled={loading}
+                  disabled={isUpdatingProfile}
                 >
                   Отмена
                 </Button>
@@ -362,17 +366,30 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
                 <ListGroup.Item key={ad.id}>
                   <div className="d-flex w-100 justify-content-between">
                     <h6 className="mb-1">
-                      {ad.status === 'lost' ? 'Потерян' : 'Найден'}: {getAnimalType(ad.type)} {ad.name ? `- ${ad.name}` : ''}
+                      {getAnimalType(ad.type)} {ad.name ? `- ${ad.name}` : ''}
                     </h6>
-                    <small>{ad.date}</small>
+                    <small>{formatDate(ad.date)}</small>
                   </div>
-                  <p className="mb-1">{ad.description.length > 100 ? `${ad.description.substring(0, 100)}...` : ad.description}</p>
+                  <p className="mb-1">
+                    {ad.description && ad.description.length > 100 ? 
+                      `${ad.description.substring(0, 100)}...` : 
+                      (ad.description || 'Нет описания')}
+                  </p>
                   <small>Район: {getDistrictName(ad.district)}</small>
-                  <Badge bg={ad.adStatus === 'active' ? 'success' : 'secondary'} className="float-end">
-                    {ad.adStatus === 'active' ? 'Активно' : 'Завершено'}
+                  <Badge bg={getStatusClass(ad.adStatus)} className="float-end">
+                    {getStatusText(ad.adStatus)}
                   </Badge>
                   <div className="mt-2">
-                    <Button variant="outline-primary" size="sm" onClick={() => editAd(ad)}>
+                    <Button variant="outline-primary" size="sm" onClick={() => navigate(`/pet/${ad.id}`)}>
+                      Просмотр
+                    </Button>
+                    <Button 
+                      variant="outline-warning" 
+                      size="sm" 
+                      className="ms-2" 
+                      onClick={() => handleEditPet(ad)}
+                      disabled={loading}
+                    >
                       Редактировать
                     </Button>
                     <Button 
@@ -380,9 +397,11 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
                       size="sm" 
                       className="ms-2" 
                       onClick={() => handleDeleteAd(ad.id)}
-                      disabled={loading}
+                      disabled={isDeleting && deletePetId === ad.id}
                     >
-                      Удалить
+                      {isDeleting && deletePetId === ad.id ? (
+                        <Spinner animation="border" size="sm" />
+                      ) : 'Удалить'}
                     </Button>
                   </div>
                 </ListGroup.Item>
@@ -391,6 +410,18 @@ const Profile = ({ editAd, deleteAdvertisement }) => {
           </ListGroup>
         </Col>
       </Row>
+      
+      {editModalOpen && selectedPet && (
+        <EditPetModal
+          pet={selectedPet}
+          token={user?.token}
+          onClose={() => {
+            setEditModalOpen(false);
+            setSelectedPet(null);
+          }}
+          onSuccess={handlePetUpdated}
+        />
+      )}
     </Container>
   );
 };

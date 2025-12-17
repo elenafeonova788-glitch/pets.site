@@ -1,414 +1,175 @@
 // context/AuthContext.jsx
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { usersAPI, petsAPI } from '../utils/apiService';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 
-const AuthContext = createContext();
+const AuthContext = createContext({});
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userAds, setUserAds] = useState([]);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('authToken'));
+  const [userAds, setUserAds] = useState([]); // Добавим для совместимости
 
-  // Получение ключей localStorage для конкретного пользователя
-  const getUserDataKey = (userId) => `userData_${userId}`;
-  const getUserAdsKey = (userId) => `userAds_${userId}`;
-
-  // Сохранение данных пользователя
-  const saveUserData = (userData, authToken = null) => {
-    if (!userData || !userData.id) {
-      console.error('Не удалось сохранить данные пользователя: нет ID');
-      return null;
-    }
-    
-    const dataToSave = {
-      id: userData.id,
-      name: userData.name,
-      email: userData.email,
-      phone: userData.phone,
-      registrationDate: userData.registrationDate || new Date().toISOString().split('T')[0],
-      ordersCount: userData.ordersCount || 0,
-      petsCount: userData.petsCount || 0,
-    };
-    
-    // Сохраняем данные пользователя по его ID
-    localStorage.setItem(getUserDataKey(userData.id), JSON.stringify(dataToSave));
-    
-    // Сохраняем информацию о текущем пользователе
-    localStorage.setItem('currentUserId', userData.id);
-    
-    if (authToken) {
-      localStorage.setItem('authToken', authToken);
-      setToken(authToken);
-    }
-    
-    console.log('Сохранены данные пользователя:', dataToSave);
-    return dataToSave;
-  };
-
-  // Загрузка данных пользователя по ID
-  const loadUserData = (userId) => {
-    if (!userId) return null;
-    
-    const userDataStr = localStorage.getItem(getUserDataKey(userId));
-    if (userDataStr) {
-      try {
-        return JSON.parse(userDataStr);
-      } catch (error) {
-        console.error('Ошибка парсинга данных пользователя:', error);
-        return null;
-      }
-    }
-    return null;
-  };
-
-  // Загрузка объявлений пользователя по ID
-  const loadUserAds = (userId) => {
-    if (!userId) return [];
-    
-    const adsStr = localStorage.getItem(getUserAdsKey(userId));
-    if (adsStr) {
-      try {
-        return JSON.parse(adsStr);
-      } catch (error) {
-        console.error('Ошибка парсинга объявлений:', error);
-        return [];
-      }
-    }
-    return [];
-  };
-
-  // Инициализация при загрузке приложения
   useEffect(() => {
-    const initAuth = async () => {
-      const savedToken = localStorage.getItem('authToken');
-      const savedUserId = localStorage.getItem('currentUserId');
-      
-      if (savedToken && savedUserId) {
-        try {
-          // Загружаем локальные данные
-          const userData = loadUserData(savedUserId);
-          const adsData = loadUserAds(savedUserId);
-          
-          if (userData) {
-            setCurrentUser(userData);
-            setUserAds(adsData);
-            setToken(savedToken);
-          } else {
-            // Если локальные данные не найдены, пробуем загрузить с сервера
-            try {
-              const response = await usersAPI.getCurrentUser(savedToken);
-              if (response.data && response.data.user) {
-                const user = response.data.user[0] || response.data.user;
-                const userData = {
-                  id: user.id,
-                  name: user.name,
-                  email: user.email,
-                  phone: user.phone || '',
-                  registrationDate: user.registrationDate || user.created_at || new Date().toISOString().split('T')[0],
-                  ordersCount: user.ordersCount || 0,
-                  petsCount: user.petsCount || 0,
-                };
-                
-                saveUserData(userData, savedToken);
-                setCurrentUser(userData);
-                
-                // Загружаем объявления пользователя
-                try {
-                  const ordersResponse = await usersAPI.getUserOrders(user.id, savedToken);
-                  if (ordersResponse.data && ordersResponse.data.orders) {
-                    const formattedAds = ordersResponse.data.orders.map(ad => ({
-                      id: ad.id,
-                      type: ad.kind || 'животное',
-                      status: 'active',
-                      name: ad.name || '',
-                      description: ad.description || '',
-                      district: ad.district || '',
-                      date: ad.date || '',
-                      photos: ad.photos || [],
-                      mark: ad.mark || '',
-                      adStatus: ad.status || 'active',
-                      userId: user.id,
-                    }));
-                    
-                    setUserAds(formattedAds);
-                    localStorage.setItem(getUserAdsKey(user.id), JSON.stringify(formattedAds));
-                  }
-                } catch (adsError) {
-                  console.error('Ошибка загрузки объявлений:', adsError);
-                }
-              }
-            } catch (apiError) {
-              console.error('Ошибка загрузки данных с сервера:', apiError);
-              // Очищаем невалидные данные
-              localStorage.removeItem('authToken');
-              localStorage.removeItem('currentUserId');
-            }
-          }
-        } catch (error) {
-          console.error('Ошибка инициализации:', error);
-        }
-      }
-      
-      setLoading(false);
-    };
-
-    initAuth();
+    // Проверяем сохраненную аутентификацию при загрузке
+    const token = localStorage.getItem('authToken');
+    const email = localStorage.getItem('userEmail');
+    const name = localStorage.getItem('userName');
+    const phone = localStorage.getItem('userPhone');
+    const userId = localStorage.getItem('userId');
+    
+    // ВАЖНО: только если есть токен - это авторизованный пользователь
+    if (token && email) {
+      setUser({
+        email,
+        token,
+        name: name || email.split('@')[0],
+        phone: phone || '',
+        id: userId
+      });
+    } 
+    // Если есть email но НЕТ токена - удаляем эти данные, они не нужны
+    else if (email) {
+      localStorage.removeItem('userEmail');
+      localStorage.removeItem('userName');
+      localStorage.removeItem('userPhone');
+      localStorage.removeItem('userId');
+      setUser(null);
+    }
+    
+    setLoading(false);
   }, []);
 
-  // Вход в систему
-  const login = async (credentials) => {
-    try {
-      setLoading(true);
-      console.log('=== LOGIN ATTEMPT ===');
-
-      // 1. Отправляем запрос на сервер для входа
-      const response = await usersAPI.login(credentials);
-      console.log('Login API response:', response);
-
-      // Извлекаем токен из ответа
-      let authToken = null;
-      
-      if (response.data && response.data.token) {
-        authToken = response.data.token;
-      } else if (response.token) {
-        authToken = response.token;
-      } else if (response.data && response.data.access_token) {
-        authToken = response.data.access_token;
-      }
-
-      if (!authToken) {
-        console.error('No token in response:', response);
-        throw new Error('Токен не получен от сервера. Неверный email или пароль.');
-      }
-
-      // 2. Получаем данные пользователя с сервера
-      try {
-        const userResponse = await usersAPI.getCurrentUser(authToken);
-        console.log('User data response:', userResponse);
-        
-        if (!userResponse.data || !userResponse.data.user) {
-          throw new Error('Не удалось получить данные пользователя');
-        }
-        
-        const user = userResponse.data.user[0] || userResponse.data.user;
-        
-        // Форматируем данные пользователя
-        const userData = {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone || '',
-          registrationDate: user.registrationDate || user.created_at || new Date().toISOString().split('T')[0],
-          ordersCount: user.ordersCount || 0,
-          petsCount: user.petsCount || 0,
-        };
-        
-        // 3. Получаем объявления пользователя
-        let userAdsData = [];
-        try {
-          const ordersResponse = await usersAPI.getUserOrders(user.id, authToken);
-          if (ordersResponse.data && ordersResponse.data.orders) {
-            userAdsData = ordersResponse.data.orders.map(ad => ({
-              id: ad.id,
-              type: ad.kind || 'животное',
-              status: 'active',
-              name: ad.name || '',
-              description: ad.description || '',
-              district: ad.district || '',
-              date: ad.date || '',
-              photos: ad.photos || [],
-              mark: ad.mark || '',
-              adStatus: ad.status || 'active',
-              userId: user.id,
-            }));
-          }
-        } catch (adsError) {
-          console.error('Ошибка загрузки объявлений:', adsError);
-        }
-
-        // 4. Сохраняем данные
-        saveUserData(userData, authToken);
-        setCurrentUser(userData);
-        setUserAds(userAdsData);
-        localStorage.setItem(getUserAdsKey(user.id), JSON.stringify(userAdsData));
-        
-        console.log('Успешный вход, пользователь:', userData);
-
-        return { success: true, user: userData };
-
-      } catch (userDataError) {
-        console.error('Ошибка загрузки данных пользователя:', userDataError);
-        throw new Error('Не удалось загрузить данные пользователя');
-      }
-
-    } catch (error) {
-      console.error('=== LOGIN ERROR ===');
-      console.error('Full error:', error);
-      
-      let errorMessage = error.message || 'Ошибка при входе';
-
-      if (errorMessage.includes('Failed to fetch') || 
-          errorMessage.includes('Не удалось подключиться')) {
-        errorMessage = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
-      } else if (errorMessage.includes('Unauthorized') || 
-                 errorMessage.includes('Invalid credentials') ||
-                 errorMessage.includes('Неверный email или пароль')) {
-        errorMessage = 'Неверный email или пароль';
-      } else if (error.status === 401 || error.status === 422) {
-        errorMessage = 'Неверный email или пароль';
-      }
-
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
+  const login = (userData, token) => {
+    if (!token) {
+      console.error('Пустой токен при входе');
+      return;
     }
-  };
-
-  // Регистрация
-  const register = async (userData) => {
-    try {
-      setLoading(true);
-      console.log('=== REGISTRATION ATTEMPT ===');
-
-      // 1. Регистрируем пользователя
-      const response = await usersAPI.register(userData);
-      console.log('Registration API response:', response);
-
-      // Проверяем успешность регистрации
-      if (response.status === 204 || response.success) {
-        console.log('Registration successful');
-        
-        // 2. Создаем временного пользователя
-        const tempUserId = Date.now();
-        const userDataToSave = {
-          id: tempUserId,
-          name: userData.name,
-          phone: userData.phone,
-          email: userData.email,
-          registrationDate: new Date().toISOString().split('T')[0],
-          ordersCount: 0,
-          petsCount: 0,
-        };
-        
-        // 3. Сохраняем данные временного пользователя
-        saveUserData(userDataToSave);
-        
-        // 4. Устанавливаем пользователя в состояние
-        setCurrentUser(userDataToSave);
-        setUserAds([]);
-        
-        // 5. Пытаемся автоматически войти
-        try {
-          console.log('Попытка автоматического входа после регистрации...');
-          const loginResult = await login({
-            email: userData.email,
-            password: userData.password
-          });
-          
-          return { 
-            success: true, 
-            message: 'Регистрация прошла успешно! Вы автоматически вошли в систему.',
-            user: loginResult.user
-          };
-        } catch (loginError) {
-          console.log('Автоматический вход не удался, но регистрация успешна');
-          
-          return { 
-            success: true, 
-            message: 'Регистрация прошла успешно! Теперь вы можете войти в систему.',
-            user: userDataToSave
-          };
-        }
-      }
-      
-      throw new Error('Ошибка регистрации');
-
-    } catch (error) {
-      console.error('=== REGISTRATION ERROR ===');
-      console.error('Full error:', error);
-      
-      let errorMessage = 'Ошибка при регистрации';
-      
-      if (error.message) {
-        if (error.message.includes('Failed to fetch') || 
-            error.message.includes('Не удалось подключиться')) {
-          errorMessage = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
-        } else if (error.status === 422) {
-          // Ошибки валидации с сервера
-          if (error.data && error.data.errors) {
-            const errors = error.data.errors;
-            if (errors.email) errorMessage = `Email: ${errors.email[0]}`;
-            else if (errors.phone) errorMessage = `Телефон: ${errors.phone[0]}`;
-            else if (errors.password) errorMessage = `Пароль: ${errors.password[0]}`;
-            else if (errors.name) errorMessage = `Имя: ${errors.name[0]}`;
-            else if (errors.confirm) errorMessage = `Согласие: ${errors.confirm[0]}`;
-          } else {
-            errorMessage = 'Ошибка валидации данных. Проверьте правильность введенных данных.';
-          }
-        } else if (error.status === 500) {
-          errorMessage = 'Ошибка сервера. Попробуйте позже.';
-        } else {
-          errorMessage = error.message;
-        }
-      }
-      
-      throw new Error(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Выход из системы
-  const logout = () => {
-    console.log('Logging out');
     
-    // Удаляем только токен, но сохраняем данные пользователя
+    // Сохраняем все данные
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('userEmail', userData.email);
+    
+    if (userData.name) {
+      localStorage.setItem('userName', userData.name);
+    } else {
+      localStorage.setItem('userName', userData.email.split('@')[0]);
+    }
+    
+    if (userData.phone) {
+      localStorage.setItem('userPhone', userData.phone);
+    }
+    
+    if (userData.id) {
+      localStorage.setItem('userId', userData.id.toString());
+    }
+    
+    setUser({
+      email: userData.email,
+      token,
+      name: userData.name || userData.email.split('@')[0],
+      phone: userData.phone || '',
+      id: userData.id
+    });
+    
+    return { success: true, user: userData };
+  };
+
+  const logout = () => {
     localStorage.removeItem('authToken');
-    localStorage.removeItem('currentUserId');
-    setToken(null);
-    setCurrentUser(null);
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userPhone');
+    localStorage.removeItem('userId');
+    setUser(null);
     setUserAds([]);
   };
 
-  // Обновление данных пользователя
-  const updateUser = async (userData) => {
+  const updateUser = (userData) => {
+    if (userData.name) {
+      localStorage.setItem('userName', userData.name);
+    }
+    if (userData.phone) {
+      localStorage.setItem('userPhone', userData.phone);
+    }
+    if (userData.email) {
+      localStorage.setItem('userEmail', userData.email);
+    }
+    if (userData.id) {
+      localStorage.setItem('userId', userData.id.toString());
+    }
+    
+    setUser(prev => ({
+      ...prev,
+      ...userData
+    }));
+  };
+
+  // Методы для работы с объявлениями (добавляем для совместимости)
+  const addUserAd = async (formData, files) => {
     try {
-      setLoading(true);
-      
-      if (!currentUser || !token) {
+      if (!user || !user.token) {
         throw new Error('Пользователь не авторизован');
       }
       
-      // Обновляем локальное состояние
-      const updatedUser = {
-        ...currentUser,
-        ...userData,
-      };
-
-      // Сохраняем в localStorage
-      saveUserData(updatedUser, token);
-      setCurrentUser(updatedUser);
+      const data = new FormData();
+      
+      // Добавляем текстовые поля
+      Object.keys(formData).forEach(key => {
+        if (formData[key] !== undefined && formData[key] !== null) {
+          data.append(key, formData[key]);
+        }
+      });
+      
+      // Добавляем фото
+      if (files && files.length > 0) {
+        files.forEach((file, index) => {
+          if (file.type === 'image/png') {
+            data.append(`photo${index + 1}`, file);
+          }
+        });
+      }
+      
+      const response = await fetch('https://pets.сделай.site/api/pets', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: data
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Ошибка при добавлении объявления');
+      }
+      
+      // Обновляем список объявлений
+      await refreshUserAds();
       
       return { success: true };
       
     } catch (error) {
-      console.error('Update user error:', error);
+      console.error('Add user ad error:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
-  // Обновление объявлений пользователя
   const refreshUserAds = async () => {
-    if (currentUser && token) {
-      try {
-        const ordersResponse = await usersAPI.getUserOrders(currentUser.id, token);
-        if (ordersResponse.data && ordersResponse.data.orders) {
-          const formattedAds = ordersResponse.data.orders.map(ad => ({
+    if (!user?.id || !user.token) {
+      return [];
+    }
+    
+    try {
+      const response = await fetch(`https://pets.сделай.site/api/users/orders/${user.id}`, {
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data?.orders) {
+          const formattedAds = data.data.orders.map(ad => ({
             id: ad.id,
             type: ad.kind || 'животное',
             status: 'active',
@@ -419,92 +180,156 @@ export const AuthProvider = ({ children }) => {
             photos: ad.photos || [],
             mark: ad.mark || '',
             adStatus: ad.status || 'active',
-            userId: currentUser.id,
+            userId: user.id,
           }));
           
           setUserAds(formattedAds);
-          localStorage.setItem(getUserAdsKey(currentUser.id), JSON.stringify(formattedAds));
+          localStorage.setItem(`userAds_${user.id}`, JSON.stringify(formattedAds));
           return formattedAds;
         }
-      } catch (error) {
-        console.error('Ошибка обновления объявлений:', error);
       }
+    } catch (error) {
+      console.error('Ошибка обновления объявлений:', error);
     }
+    
     return [];
   };
 
+  const deleteUserAd = async (id) => {
+    try {
+      if (!user || !user.token) {
+        throw new Error('Пользователь не авторизован');
+      }
+      
+      const response = await fetch(`https://pets.сделай.site/api/users/orders/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${user.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        // Обновляем список объявлений
+        await refreshUserAds();
+        return { success: true };
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Ошибка при удалении объявления');
+      }
+    } catch (error) {
+      console.error('Delete user ad error:', error);
+      throw error;
+    }
+  };
+
+  // Методы регистрации и входа из старого контекста (упрощенные)
+  const register = async (userData) => {
+    try {
+      const response = await fetch('https://pets.сделай.site/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: userData.name,
+          phone: userData.phone,
+          email: userData.email,
+          password: userData.password,
+          password_confirmation: userData.password_confirmation,
+          confirm: userData.confirm || 1
+        }),
+      });
+      
+      if (response.ok) {
+        // Пробуем автоматически войти после регистрации
+        try {
+          const loginResult = await login({ 
+            email: userData.email,
+            password: userData.password 
+          });
+          
+          return { 
+            success: true, 
+            message: 'Регистрация прошла успешно! Вы автоматически вошли в систему.',
+            user: loginResult.user
+          };
+        } catch (loginError) {
+          return { 
+            success: true, 
+            message: 'Регистрация прошла успешно! Теперь вы можете войти в систему.',
+            user: {
+              email: userData.email,
+              name: userData.name,
+              phone: userData.phone
+            }
+          };
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Ошибка при регистрации');
+      }
+    } catch (error) {
+      console.error('Register error:', error);
+      throw error;
+    }
+  };
+
   const value = {
-    currentUser,
+    currentUser: user,
     userAds,
-    isAuthenticated: !!currentUser && !!token,
+    isAuthenticated: !!user && !!user.token,
     loading,
-    token,
+    token: user?.token,
     login,
     register,
     logout,
     updateUser,
     refreshUserAds,
-    addUserAd: async (formData) => {
-      try {
-        const response = await petsAPI.addPet(formData, token);
-        
-        // После добавления объявления обновляем список
-        if (currentUser) {
-          await refreshUserAds();
-          
-          // Обновляем счетчик объявлений
-          const updatedUser = {
-            ...currentUser,
-            ordersCount: (currentUser.ordersCount || 0) + 1,
-          };
-          saveUserData(updatedUser, token);
-          setCurrentUser(updatedUser);
-        }
-        
-        return response;
-      } catch (error) {
-        console.error('Add user ad error:', error);
-        throw error;
-      }
-    },
+    addUserAd,
+    deleteUserAd,
     updateUserAd: async (id, updatedData) => {
+      // Реализация обновления объявления
       try {
-        const response = await petsAPI.updatePet(id, updatedData, token);
+        const data = new FormData();
         
-        // После обновления объявления обновляем список
-        if (currentUser) {
-          await refreshUserAds();
+        if (updatedData.description) {
+          data.append('description', updatedData.description);
         }
         
-        return response;
+        if (updatedData.mark) {
+          data.append('mark', updatedData.mark);
+        }
+        
+        // Добавляем новые фото
+        if (updatedData.photos && updatedData.photos.length > 0) {
+          updatedData.photos.forEach((file, index) => {
+            if (file.type === 'image/png') {
+              data.append(`photo${index + 1}`, file);
+            }
+          });
+        }
+        
+        const response = await fetch(`https://pets.сделай.site/api/pets/${id}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${user?.token}`
+          },
+          body: data
+        });
+        
+        if (response.ok) {
+          await refreshUserAds();
+          return { success: true };
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || 'Ошибка при обновлении объявления');
+        }
       } catch (error) {
         console.error('Update user ad error:', error);
         throw error;
       }
-    },
-    deleteUserAd: async (id) => {
-      try {
-        const response = await petsAPI.deletePet(id, token);
-        
-        // После удаления объявления обновляем список
-        if (currentUser) {
-          await refreshUserAds();
-          
-          // Обновляем счетчик объявлений
-          const updatedUser = {
-            ...currentUser,
-            ordersCount: Math.max(0, (currentUser.ordersCount || 0) - 1),
-          };
-          saveUserData(updatedUser, token);
-          setCurrentUser(updatedUser);
-        }
-        
-        return response;
-      } catch (error) {
-        console.error('Delete user ad error:', error);
-        throw error;
-      }
-    },
+    }
   };
 
   return (

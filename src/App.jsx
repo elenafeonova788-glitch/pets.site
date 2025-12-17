@@ -19,10 +19,9 @@ function AppContent() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPet, setSelectedPet] = useState(null);
   const [selectedAd, setSelectedAd] = useState(null);
-  const [error, setError] = useState('');
+  const [notification, setNotification] = useState(null);
 
   const showPetDetails = (pet) => {
-    console.log('App: Opening pet modal for:', pet);
     if (pet) {
       setSelectedPet(pet);
       setShowPetModal(true);
@@ -39,9 +38,9 @@ function AppContent() {
   const deleteAdvertisement = async (id) => {
     try {
       await deleteUserAd(id);
-      alert('Объявление успешно удалено!');
+      showNotification('Объявление успешно удалено!', 'success');
     } catch (error) {
-      setError('Ошибка при удалении объявления: ' + error.message);
+      showNotification('Ошибка при удалении объявления: ' + error.message, 'danger');
       console.error(error);
     }
   };
@@ -52,32 +51,44 @@ function AppContent() {
         await updateUserAd(selectedAd.id, updatedData);
         setShowEditModal(false);
         setSelectedAd(null);
-        alert('Объявление успешно обновлено!');
+        showNotification('Объявление успешно обновлено!', 'success');
       } catch (error) {
-        setError('Ошибка при обновлении объявления: ' + error.message);
+        showNotification('Ошибка при обновлении объявления: ' + error.message, 'danger');
         console.error(error);
       }
     }
   };
 
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const hideNotification = () => {
+    setNotification(null);
+  };
+
   return (
     <>
-      {/* ПЕРЕДАЕМ ФУНКЦИЮ showPetDetails В HEADER */}
       <Header showPetDetails={showPetDetails} />
       
       <Container className="my-4">
-        {error && (
-          <Alert variant="danger" onClose={() => setError('')} dismissible>
-            {error}
+        {notification && (
+          <Alert 
+            variant={notification.type} 
+            onClose={hideNotification} 
+            dismissible
+            className="position-fixed top-0 end-0 m-3"
+            style={{ zIndex: 1050, maxWidth: '400px' }}
+          >
+            {notification.message}
           </Alert>
         )}
+        
         <Routes>
           <Route path="/" element={<Home showPetDetails={showPetDetails} />} />
           <Route path="/search" element={<Search showPetDetails={showPetDetails} />} />
-          <Route 
-            path="/add-pet" 
-            element={<AddPet />}
-          />
+          <Route path="/add-pet" element={<AddPet />} />
           <Route 
             path="/profile" 
             element={
@@ -94,6 +105,7 @@ function AppContent() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Container>
+      
       <Footer />
       
       {selectedPet && (

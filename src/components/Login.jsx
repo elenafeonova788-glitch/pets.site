@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Button, Card, Container, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
-import { validateEmail } from '../utils/helpers';
 
 const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    rememberMe: false
   });
   
   const [errors, setErrors] = useState({});
@@ -18,10 +16,10 @@ const Login = () => {
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: value
     }));
     
     // Очищаем ошибки при изменении
@@ -40,14 +38,13 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('=== LOGIN FORM SUBMIT ===');
     
     // Валидация
     const newErrors = {};
 
     if (!formData.email.trim()) {
       newErrors.email = 'Поле обязательно для заполнения';
-    } else if (!validateEmail(formData.email)) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Введите корректный email адрес';
     }
 
@@ -56,7 +53,6 @@ const Login = () => {
     }
 
     if (Object.keys(newErrors).length > 0) {
-      console.log('Form validation errors:', newErrors);
       setErrors(newErrors);
       return;
     }
@@ -66,57 +62,78 @@ const Login = () => {
       setApiError('');
       setErrors({});
       
+      // Входим через AuthContext
       const credentials = {
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
       };
-
-      console.log('Attempting login with:', { ...credentials, password: '***' });
       
-      await login(credentials);
-      console.log('Login successful, navigating to profile');
+      // Используем функцию login из AuthContext
+      const response = await fetch('https://pets.сделай.site/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials)
+      });
       
-      // Перенаправляем в личный кабинет
-      navigate('/profile', { replace: true });
-      
-    } catch (error) {
-      console.error('=== LOGIN ERROR ===');
-      console.error('Error:', error);
-      
-      let errorMessage = error.message || 'Ошибка при входе';
-      
-      // Улучшаем сообщения об ошибках по ТЗ
-      if (error.status === 401) {
-        errorMessage = 'Неверный email или пароль';
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (!data.token && !data.data?.token) {
+          throw new Error('Токен не получен от сервера');
+        }
+        
+        const token = data.token || data.data?.token;
+        
+        // Получаем данные пользователя
+        const userResponse = await fetch('https://pets.сделай.site/api/users', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        });
+        
+        let userData = null;
+        if (userResponse.ok) {
+          const userInfo = await userResponse.json();
+          
+          if (userInfo.data?.user?.[0]) {
+            userData = userInfo.data.user[0];
+          } else if (userInfo.data) {
+            userData = userInfo.data;
+          } else if (userInfo) {
+            userData = userInfo;
+          }
+        }
+        
+        const user = {
+          email: userData?.email || credentials.email,
+          token: token,
+          name: userData?.name || credentials.email.split('@')[0],
+          phone: userData?.phone || '',
+          id: userData?.id
+        };
+        
+        // Вызываем login из контекста
+        login(user, token);
+        
+        // Перенаправляем в личный кабинет
+        navigate('/profile');
+        
+      } else if (response.status === 401 || response.status === 422) {
+        setApiError('Неверный email или пароль');
         setErrors({
           email: 'Неверный email или пароль',
           password: 'Неверный email или пароль'
         });
-      } else if (error.status === 422) {
-        errorMessage = 'Неверный email или пароль';
-        setErrors({
-          email: 'Неверный email или пароль',
-          password: 'Неверный email или пароль'
-        });
-      } else if (errorMessage.includes('Invalid credentials') || 
-          errorMessage.includes('Unauthorized')) {
-        errorMessage = 'Неверный email или пароль';
-        setErrors({
-          email: 'Неверный email или пароль',
-          password: 'Неверный email или пароль'
-        });
-      } else if (errorMessage.includes('email')) {
-        setErrors({ email: errorMessage });
-      } else if (errorMessage.includes('password')) {
-        setErrors({ password: errorMessage });
-      } else if (errorMessage.includes('Токен не получен')) {
-        errorMessage = 'Ошибка аутентификации. Попробуйте еще раз.';
-        setApiError(errorMessage);
       } else {
-        setApiError(errorMessage);
+        const errorData = await response.json();
+        setApiError(errorData.error?.message || 'Ошибка при входе');
       }
       
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error('Ошибка входа:', error);
+      setApiError(error.message || 'Ошибка при входе');
     } finally {
       setLoading(false);
     }
@@ -202,7 +219,6 @@ const Login = () => {
                     setFormData({
                       email: 'user@user.ru',
                       password: 'paSSword1',
-                      rememberMe: false
                     });
                     setErrors({});
                     setApiError('');
@@ -214,14 +230,6 @@ const Login = () => {
               </div>
             </Card.Body>
           </Card>
-          
-          <div className="mt-4 text-center">
-            <p className="text-muted small">
-              <strong>Тестовые данные из ТЗ:</strong><br/>
-              Email: user@user.ru<br/>
-              Пароль: paSSword1<br/>
-            </p>
-          </div>
         </Col>
       </Row>
     </Container>
